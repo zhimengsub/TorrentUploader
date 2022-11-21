@@ -133,5 +133,3 @@ dmypy.json
 test/
 test*
 temp/
-
-!utils
