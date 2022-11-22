@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "torrentuploader"
+version = "0.1.0"
+description = "监视种子文件更改情况，并自动上传至BT站"
+authors = ["Zejun Zhou <850462618@qq.com>", "Karako <karakohear@gmail.com>"]
+license = "AGPL-3.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+regex = "^2022.10.31"
+ujson = "^5.5.0"
+watchfiles = "^0.18.1"
+pydantic = "^1.10.2"
+httpx = "^0.23.1"
+pyqt5 = "^5.15.7"
+orjson = "^3.8.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
