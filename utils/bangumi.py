@@ -4,7 +4,7 @@ from typing import Union
 from httpx import Client
 
 from errors import LoginFiled, TorrentDuplicateError
-from models import BangumiUser
+from _model import BangumiUser
 from utils.const import BANGUMI_MOE_HOST
 from utils.helpers import str2md5
 
