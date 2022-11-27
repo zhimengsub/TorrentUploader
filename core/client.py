@@ -4,10 +4,16 @@ from typing import List, Optional
 from httpcore import URL
 from httpx import Client, Cookies
 from pydantic import Field
+from requests.utils import cookiejar_from_dict
 from typing_extensions import Self
 
-from errors import LoginFiled, TorrentDuplicateError, UploadTorrentException
-from models.bangumi import BangumiResponse, Tag, UploadResponse
+from errors import (
+    CookieExpired,
+    LoginFiled,
+    TorrentDuplicateError,
+    UploadTorrentException,
+)
+from models.bangumi import BangumiResponse, My, Tag, UploadResponse
 from utils import jsonlib as json
 from utils.const import BANGUMI_MOE_HOST, PROJECT_ROOT
 from utils.helpers import str2md5
@@ -60,6 +66,38 @@ class Bangumi(Net):
     @classmethod
     def login_with_cookies(cls, path: StrOrPath) -> Self:
         """使用保存的cookies来登录"""
+        with open(
+            PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8"
+        ) as file:
+            json_data = json.load(file)
+        cookiejar = cookiejar_from_dict(json_data)
+        cookies = Cookies(cookiejar)
+        # api/user/session
+        client = Client(
+            base_url=BANGUMI_MOE_HOST,
+            headers={
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0",
+                "cache-control": "no-cache",
+                "DNT": "1",
+                "host": BANGUMI_MOE_HOST.host,
+                "origin": "https://bangumi.moe",
+                "referer": "https://bangumi.moe/",
+            },
+        )
+        response = client.get("/api/user/session", cookies=cookies)
+        response.raise_for_status()
+        json_data = json.loads(response.text)
+        if not json_data:
+            raise CookieExpired("cookie 无效或已经过期，请尝试使用其它登录方式进行登录。")
+        result = cls.parse_obj(json_data | {"cookies": cookies})
+        client.cookies = cookies
+        result._client = client
+        return result
+
+    def my(self) -> My:
+        response = self.get("/api/torrent/my")
+        response.raise_for_status()
+        return My.parse_raw(response.text)
 
     def my_teams(self) -> List:
         """获取我的team"""
@@ -75,7 +113,7 @@ class Bangumi(Net):
         if not path.exists():
             raise FileNotFoundError(f"种子文件不存在：{path}")
         response = self.post(
-            "/api/user/signin", files={"file": path.open("rb")}
+            "/api/v2/torrent/upload", files={"file": path.open("rb")}
         )
         response.raise_for_status()
         response_obj = BangumiResponse.parse_raw(response.text)
@@ -85,31 +123,7 @@ class Bangumi(Net):
             raise UploadTorrentException(response_obj.message or "上传遇到未知错误")
         return UploadResponse.parse_raw(response.text)
 
-    # api/tag/misc
     def get_tag_misc(self) -> List[Tag]:
         response = self.get("/api/tag/misc")
         json_data = json.loads(response.text)
         return [Tag.parse_obj(i) for i in json_data]
-
-
-def main():
-    client = Bangumi.login_with_password(
-        "qcowlckp@gmail.com", "bangumiZdm148632."
-    )
-    tags = client.get_tag_misc()
-    print(tags)
-    teams = client.my_teams()
-    print(teams)
-    breakpoint()
-    response = client.upload_torrent(
-        PROJECT_ROOT.joinpath(
-            "test/torrents/"
-            "[織夢字幕組][夫婦以上，戀人未滿 Fuufu Ijou, Koibito Miman][02集][AVC]"
-            "[簡日雙語][720P].mp4.torrent"
-        )
-    )
-    print(response)
-
-
-if __name__ == "__main__":
-    main()

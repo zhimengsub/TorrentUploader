@@ -4,7 +4,7 @@ from pydantic import Extra, Field
 
 from models import BaseModel
 
-__all__ = ["BangumiResponse", "UploadResponse", "Tag"]
+# __all__ = ["BangumiResponse", "UploadResponse", "Tag"]
 
 
 class BangumiResponse(BaseModel):
@@ -34,3 +34,8 @@ class Tag(BaseModel):
     syn_lowercase: List[str]
     synonyms: List[str]
     type: str
+
+
+class My(BaseModel):
+    torrents: List
+    page_count: int
