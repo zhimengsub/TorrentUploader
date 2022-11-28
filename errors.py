@@ -16,3 +16,7 @@ class UploadTorrentException(ApplicationException):
 
 class TorrentDuplicateError(UploadTorrentException):
     """种子重复"""
+
+
+class PublishFiled(ApplicationException):
+    """发布失败"""

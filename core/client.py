@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from httpcore import URL
 from httpx import Client, Cookies
@@ -10,12 +10,20 @@ from typing_extensions import Self
 from errors import (
     CookieExpired,
     LoginFiled,
+    PublishFiled,
     TorrentDuplicateError,
     UploadTorrentException,
 )
-from models.bangumi import BangumiResponse, My, Tag, UploadResponse, Uploader
+from models.bangumi import (
+    BangumiResponse,
+    My,
+    Tag,
+    Torrent,
+    UploadResponse,
+    Uploader,
+)
 from utils import jsonlib as json
-from utils.const import BANGUMI_MOE_HOST, PROJECT_ROOT
+from utils.const import BANGUMI_MOE_HOST, PAPER_URL_LIST, PROJECT_ROOT
 from utils.helpers import str2md5
 from utils.net import Net
 from utils.typedefs import StrOrPath
@@ -64,7 +72,7 @@ class Bangumi(Uploader, Net):
     def login_with_cookies(cls, path: StrOrPath) -> Self:
         """使用保存的cookies来登录"""
         with open(
-                PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8"
+            PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8"
         ) as file:
             json_data = json.load(file)
         cookiejar = cookiejar_from_dict(json_data)
@@ -92,7 +100,7 @@ class Bangumi(Uploader, Net):
         return result
 
     def my(self) -> My:
-        """获取已上传的 torrent """
+        """获取已上传的 torrent"""
         response = self.get("/api/torrent/my")
         response.raise_for_status()
         return My.parse_raw(response.text)
@@ -124,6 +132,7 @@ class Bangumi(Uploader, Net):
     def get_tag_misc(self) -> List[Tag]:
         """获取类型标签"""
         response = self.get("/api/tag/misc")
+        response.raise_for_status()
         json_data = json.loads(response.text)
         return [Tag.parse_obj(i) for i in json_data]
 
@@ -133,3 +142,40 @@ class Bangumi(Uploader, Net):
         response.raise_for_status()
         json_data = json.loads(response.text)
         return [Tag.parse_obj(i) for i in json_data]
+
+    # noinspection SpellCheckingInspection
+    def publish(
+        self,
+        btskey: str,
+        category_tag_id: str,
+        file_id: str,
+        title: str,
+        introduction: str,
+        tags: List[Union[str, Tag]] = None,
+    ) -> Torrent:
+        """发布种子"""
+        tags = tags or []
+        tags = [(i.id if isinstance(i, Tag) else i) for i in tags]
+
+        # 替换海报
+        week_num = datetime.now().isocalendar()[1]
+        paper = PAPER_URL_LIST[week_num % len(PAPER_URL_LIST)]
+        for i in PAPER_URL_LIST:
+            introduction.replace(i, paper)
+
+        response = self.post(
+            "/api/torrent/add",
+            json={
+                "btskey": btskey,
+                "category_tag_id": category_tag_id,
+                "file_id": file_id,
+                "introduction": introduction,
+                "title": title,
+                "tag_ids": tags,
+            },
+        )
+        response.raise_for_status()
+        response_obj = BangumiResponse.parse_raw(response.text)
+        if not response_obj.success:  # 若发布错误
+            raise PublishFiled("发布错误" + ((": " + response_obj.message) or ""))
+        return Torrent.parse_obj(response_obj.__dict__["torrent"])
