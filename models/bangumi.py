@@ -49,15 +49,21 @@ class Uploader(BaseModel):
 class Torrent(BaseModel):
     id: str = Field(alias="_id")
     title: str
+    """标题"""
     introduction: str
+    """介绍"""
     comments: int
+    """评论数"""
     downloads: int
+    """下载数"""
     finished: int
     # noinspection SpellCheckingInspection
     leechers: int
     seeders: int
     publish_time: datetime
+    """发布的时间"""
     magnet: str
+    """磁力链接"""
     info_hash: str = Field(alias="infoHash")
     file_id: str
     team_id: Optional[str]
@@ -66,9 +72,11 @@ class Torrent(BaseModel):
     content: List[List[str]]
     title_index: Optional[List[str]] = Field(alias='titleIndex')
     size: str
+    """大小"""
     # noinspection SpellCheckingInspection
     btskey: str
     predicted_title: Optional[str]
+    """预测的标题"""
 
     uploader_id: str
     uploader: Optional[Uploader]
