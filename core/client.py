@@ -92,6 +92,7 @@ class Bangumi(Uploader, Net):
         return result
 
     def my(self) -> My:
+        """获取已上传的 torrent """
         response = self.get("/api/torrent/my")
         response.raise_for_status()
         return My.parse_raw(response.text)
@@ -121,11 +122,13 @@ class Bangumi(Uploader, Net):
         return UploadResponse.parse_raw(response.text)
 
     def get_tag_misc(self) -> List[Tag]:
+        """获取类型标签"""
         response = self.get("/api/tag/misc")
         json_data = json.loads(response.text)
         return [Tag.parse_obj(i) for i in json_data]
 
     def suggest(self, query: str) -> List[Tag]:
+        """通过 query 获取建议添加的标签"""
         response = self.post("/api/tag/suggest", json={"query": query})
         response.raise_for_status()
         json_data = json.loads(response.text)
