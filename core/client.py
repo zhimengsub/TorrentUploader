@@ -13,7 +13,7 @@ from errors import (
     TorrentDuplicateError,
     UploadTorrentException,
 )
-from models.bangumi import BangumiResponse, My, Tag, UploadResponse
+from models.bangumi import BangumiResponse, My, Tag, UploadResponse, Uploader
 from utils import jsonlib as json
 from utils.const import BANGUMI_MOE_HOST, PROJECT_ROOT
 from utils.helpers import str2md5
@@ -23,12 +23,9 @@ from utils.typedefs import StrOrPath
 __all__ = ["Bangumi"]
 
 
-class Bangumi(Net):
+class Bangumi(Uploader, Net):
     base_url: URL = BANGUMI_MOE_HOST
 
-    id: str = Field(alias="_id")
-    username: str
-    email_hash: str = Field(alias="emailHash")
     active: bool
     register_data: datetime = Field("regDate")
     team_ids: Optional[List[str]]
@@ -67,7 +64,7 @@ class Bangumi(Net):
     def login_with_cookies(cls, path: StrOrPath) -> Self:
         """使用保存的cookies来登录"""
         with open(
-            PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8"
+                PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8"
         ) as file:
             json_data = json.load(file)
         cookiejar = cookiejar_from_dict(json_data)
@@ -125,5 +122,11 @@ class Bangumi(Net):
 
     def get_tag_misc(self) -> List[Tag]:
         response = self.get("/api/tag/misc")
+        json_data = json.loads(response.text)
+        return [Tag.parse_obj(i) for i in json_data]
+
+    def suggest(self, query: str) -> List[Tag]:
+        response = self.post("/api/tag/suggest", json={"query": query})
+        response.raise_for_status()
         json_data = json.loads(response.text)
         return [Tag.parse_obj(i) for i in json_data]
