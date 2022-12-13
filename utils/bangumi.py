@@ -3,7 +3,7 @@ from typing import Union
 
 from httpx import Client
 
-from errors import LoginFiled, TorrentDuplicateError
+from errors import LoginFailed, TorrentDuplicateError
 from _model import BangumiUser
 from utils.const import BANGUMI_MOE_HOST
 from utils.helpers import str2md5
@@ -21,7 +21,7 @@ def login_by_password(username: str, password: str) -> BangumiUser:
     response.raise_for_status()
     json_data = response.json()
     if not json_data["success"]:  # 若登录失败
-        raise LoginFiled("登录失败，请检查您输入的用户名或密码是否正确。")
+        raise LoginFailed("登录失败，请检查您输入的用户名或密码是否正确。")
     return BangumiUser.parse_obj(
         json_data["user"] | {"cookies": response.headers["set-cookie"]}
     )

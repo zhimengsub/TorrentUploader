@@ -2,7 +2,7 @@ class ApplicationException(Exception):
     ...
 
 
-class LoginFiled(ApplicationException):
+class LoginFailed(ApplicationException):
     """登录错误"""
 
 
@@ -18,5 +18,5 @@ class TorrentDuplicateError(UploadTorrentException):
     """种子重复"""
 
 
-class PublishFiled(ApplicationException):
+class PublishFailed(ApplicationException):
     """发布失败"""

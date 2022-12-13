@@ -9,8 +9,8 @@ from typing_extensions import Self
 
 from errors import (
     CookieExpired,
-    LoginFiled,
-    PublishFiled,
+    LoginFailed,
+    PublishFailed,
     TorrentDuplicateError,
     UploadTorrentException,
 )
@@ -61,7 +61,7 @@ class Bangumi(Uploader, Net):
         response.raise_for_status()
         json_data = json.loads(response.text)
         if not json_data["success"]:
-            raise LoginFiled("登录失败，请检查您输入的用户名或密码是否正确。")
+            raise LoginFailed("登录失败，请检查您输入的用户名或密码是否正确。")
         result = cls.parse_obj(
             json_data["user"] | {"cookies": response.cookies}
         )
@@ -177,5 +177,5 @@ class Bangumi(Uploader, Net):
         response.raise_for_status()
         response_obj = BangumiResponse.parse_raw(response.text)
         if not response_obj.success:  # 若发布错误
-            raise PublishFiled("发布错误" + ((": " + response_obj.message) or ""))
+            raise PublishFailed("发布错误" + ((": " + response_obj.message) or ""))
         return Torrent.parse_obj(response_obj.__dict__["torrent"])

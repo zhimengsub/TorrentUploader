@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from pydantic import Extra, Field
 
@@ -21,6 +21,7 @@ class UploadResponse(BangumiResponse):
     file_id: str
     content: List[List[str]]
     torrents: List["Torrent"]
+    """匹配到的以往记录"""
 
     @property
     def predicted_titles(self) -> List[str]:
@@ -50,7 +51,7 @@ class TagLocale(BaseModel):
 
 class Tag(BaseModel):
     id: str = Field(alias="_id")
-    activity: bool
+    activity: int
     locale: TagLocale
     """本地化"""
     name: str
@@ -77,26 +78,25 @@ class Torrent(BaseModel):
     """标题"""
     introduction: str
     """介绍"""
-    comments: int
+    comments: Optional[int]
     """评论数"""
-    downloads: int
+    downloads: Optional[int]
     """下载数"""
-    finished: int
+    finished: Optional[int]
     # noinspection SpellCheckingInspection
-    leechers: int
-    seeders: int
+    leechers: Optional[int]
+    seeders: Optional[int]
     publish_time: datetime
     """发布的时间"""
-    magnet: str
+    magnet: Optional[str]
     """磁力链接"""
-    info_hash: str = Field(alias="infoHash")
-    file_id: str
+    info_hash: Optional[str] = Field(alias="infoHash")
+    file_id: Optional[str]
     team_id: Optional[str]
-    # noinspection SpellCheckingInspection
-    teamsync: Optional[Any]  # todo
+    teamsync: Optional[bool]
     content: List[List[str]]
     title_index: Optional[List[str]] = Field(alias="titleIndex")
-    size: str
+    size: Optional[str]
     """大小"""
     # noinspection SpellCheckingInspection
     btskey: str
@@ -110,9 +110,24 @@ class Torrent(BaseModel):
     tags: Optional[List[Tag]]
 
     category_tag_id: str
-    category_tag_: Optional[Tag]
+    category_tag: Optional[Tag]
 
 
 class My(BaseModel):
     torrents: List[Torrent]
     page_count: int
+
+
+class MyTeam(BaseModel):
+    id: str = Field(alias="_id")
+    admin_id: str
+    admin_ids: List[str]
+    approved: bool
+    auditing_ids: List[str]
+    editor_ids: List[str]
+    icon: str
+    member_ids: List[str]
+    name: str
+    regDate: str
+    signature: str
+    tag_id: str
