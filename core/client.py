@@ -23,7 +23,7 @@ from models.bangumi import (
     Uploader,
 )
 from utils import jsonlib as json
-from utils.const import BANGUMI_MOE_HOST, PAPER_URL_LIST, PROJECT_ROOT
+from utils.const import BANGUMI_MOE_HOST, PROJECT_ROOT
 from utils.helpers import str2md5
 from utils.net import Net
 from utils.typedefs import StrOrPath
@@ -157,11 +157,6 @@ class Bangumi(Uploader, Net):
         tags = tags or []
         tags = [(i.id if isinstance(i, Tag) else i) for i in tags]
 
-        # 替换海报
-        week_num = datetime.now().isocalendar()[1]
-        paper = PAPER_URL_LIST[week_num % len(PAPER_URL_LIST)]
-        for i in PAPER_URL_LIST:
-            introduction.replace(i, paper)
 
         response = self.post(
             "/api/torrent/add",
