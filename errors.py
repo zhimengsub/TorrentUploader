@@ -6,6 +6,10 @@ class LoginFailed(ApplicationException):
     """登录错误"""
 
 
+class AccountTeamError(ApplicationException):
+    """所属团队错误"""
+
+
 class CookieExpired(ApplicationException):
     """cookie 过期"""
 

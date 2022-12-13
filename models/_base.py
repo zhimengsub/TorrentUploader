@@ -1,6 +1,5 @@
-from typing import Self
-
 from pydantic import BaseModel as PydanticBaseModel
+from typing_extensions import Self
 
 from utils import jsonlib as json
 

@@ -21,6 +21,7 @@ from models.bangumi import (
     Torrent,
     UploadResponse,
     Uploader,
+    MyTeam,
 )
 from utils import jsonlib as json
 from utils.const import BANGUMI_MOE_HOST, PROJECT_ROOT
@@ -105,21 +106,26 @@ class Bangumi(Uploader, Net):
         response.raise_for_status()
         return My.parse_raw(response.text)
 
-    def my_teams(self) -> List:
+    def my_teams(self) -> List[MyTeam]:
         """获取我的team"""
         # noinspection SpellCheckingInspection
         response = self.get("/api/team/myteam")
         response.raise_for_status()
-        json_data = json.loads(response.text)
-        return json_data or []
+        my_teams = []
+        for json_data in json.loads(response.text):
+            my_teams.append(MyTeam.parse_obj(json_data))
+        return my_teams
 
-    def upload_torrent(self, path: StrOrPath) -> UploadResponse:
+    def upload_torrent(self, path: StrOrPath, team_id: Optional[str]=None) -> UploadResponse:
         """上传指定路径的种子文件"""
         path = PROJECT_ROOT.joinpath(path).resolve()
         if not path.exists():
             raise FileNotFoundError(f"种子文件不存在：{path}")
+        data = None
+        if team_id:
+            data = {"team_id": team_id}
         response = self.post(
-            "/api/v2/torrent/upload", files={"file": path.open("rb")}
+            "/api/v2/torrent/upload", data=data, files={"file": path.open("rb")}
         )
         response.raise_for_status()
         response_obj = BangumiResponse.parse_raw(response.text)
@@ -146,28 +152,38 @@ class Bangumi(Uploader, Net):
     # noinspection SpellCheckingInspection
     def publish(
         self,
-        btskey: str,
         category_tag_id: str,
         file_id: str,
         title: str,
         introduction: str,
+        team_id: str,
         tags: List[Union[str, Tag]] = None,
+        btskey: Optional[str] = '',
+        teamsync: Optional[bool] = False,
     ) -> Torrent:
         """发布种子"""
         tags = tags or []
         tags = [(i.id if isinstance(i, Tag) else i) for i in tags]
 
 
+        jsondata = {
+            "category_tag_id": category_tag_id,
+            "team_id": team_id,
+            "file_id": file_id,
+            "introduction": introduction,
+            "title": title,
+            "tag_ids": tags,
+        }
+        if btskey:
+            jsondata["btskey"] = btskey
+        if team_id:
+            jsondata["team_id"] = team_id
+        if teamsync:
+            jsondata["teamsync"] = '1'
+
         response = self.post(
             "/api/torrent/add",
-            json={
-                "btskey": btskey,
-                "category_tag_id": category_tag_id,
-                "file_id": file_id,
-                "introduction": introduction,
-                "title": title,
-                "tag_ids": tags,
-            },
+            json=jsondata,
         )
         response.raise_for_status()
         response_obj = BangumiResponse.parse_raw(response.text)

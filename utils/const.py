@@ -18,3 +18,7 @@ PAPER_URL_LIST = [
     "https://img30.360buyimg.com/imgzone/jfs/t1/145383/23/31455/448895/636b5937E54ba77cf/17ae3799c6b9f78c.png",
 ]
 """字幕组海报的链接"""
+
+VERSION = PROJECT_ROOT.joinpath('VERSION').read_text()
+
+TEAM_NAME = '织梦字幕组'
