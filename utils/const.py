@@ -1,14 +1,27 @@
+import sys
 from pathlib import Path
 
+from addict import Dict
 from httpx import URL
 
-__all__ = ["BANGUMI_MOE_HOST", "PROJECT_ROOT"]
+__all__ = ["BANGUMI_MOE_HOST", "PROJECT_ROOT", "PATHS", "VERSION"]
 
 BANGUMI_MOE_HOST = URL("https://bangumi.moe/")
 """萌番组的 host"""
 
-PROJECT_ROOT = Path(__file__).joinpath("../../").resolve()
+ISEXE = hasattr(sys, 'frozen')
+"""是否为打包程序"""
+
+PROJECT_ROOT = Path(sys.executable).parent if ISEXE else Path(__file__).parents[1]
 """项目根路径"""
+
+PATHS = Dict()
+"""管理路径"""
+PATHS.DB = PROJECT_ROOT / 'cache.db'
+"""缓存数据库路径"""
+PATHS.CONF = PROJECT_ROOT / 'configs.json'
+"""配置文件目录"""
+PATHS.ICON = PROJECT_ROOT / 'icon.ico'
 
 PAPER_URL_LIST = [
     "https://img30.360buyimg.com/imgzone/jfs/t1/141321/32/30637/399120/635daaaeE1c14939e/d56dc1fb1c06bed4.png",

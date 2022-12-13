@@ -330,3 +330,7 @@ cover/
 # Cython debug symbols
 cython_debug/
 
+*.db
+buildLayouts.py
+*.json
+*.ico
