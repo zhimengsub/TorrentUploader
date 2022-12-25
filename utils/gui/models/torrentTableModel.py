@@ -13,12 +13,14 @@ from utils.gui.torrentManager import TorrentManager
 class TorrentTableModel(QSqlTableModel):
     """Connect to torrent database"""
     updatedRoot = pyqtSignal()  # type: pyqtBoundSignal
+    torrentChanged = pyqtSignal()  # type: pyqtBoundSignal
 
     def __init__(self, parent: QObject):
         self.manager = TorrentManager(parent)
+        super().__init__(parent, self.manager.db)
         # update model data on torrentChanged
         self.manager.torrentChanged.connect(self.select)
-        super().__init__(parent, self.manager.db)
+        self.manager.torrentChanged.connect(self.torrentChanged)
         self.setEditStrategy(self.OnManualSubmit)
         self.root = None
 

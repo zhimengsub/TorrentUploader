@@ -57,6 +57,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.sourceModel = TorrentTableModel(self)
         self.sourceModel.updatedRoot.connect(lambda: [self.setViewSize(self.viewTodo, self.filterModels[PubType.Todo]),
                                                       self.setViewSize(self.viewDone, self.filterModels[PubType.Done])])
+        self.sourceModel.torrentChanged.connect(lambda: [self.setViewSize(self.viewTodo, self.filterModels[PubType.Todo]),
+                                                         self.setViewSize(self.viewDone, self.filterModels[PubType.Done])])
 
         # 把sourceModel按pubtype过滤后分别显示在各自TableView里
         self.filterModels = {
@@ -242,7 +244,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         if conf.wndWidth != -1:
             self.resize(conf.wndWidth, conf.wndHeight)
         if conf.root:
-            self.root = Path(conf.root)
+            self.updateRoot(Path(conf.root))
 
     @staticmethod
     def updateConfigs(width: int, height: int):

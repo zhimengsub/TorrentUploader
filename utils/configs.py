@@ -15,9 +15,10 @@ def loadConfigs(path: Path) -> Dict:
         wndHeight=-1,
     )
     if path.is_file():
-        with path.open('r') as f:
+        with path.open('r', encoding='utf8') as f:
             read = Dict(json.load(f))
         conf.update(read)
+        conf.root = str(conf.root)
         conf.remember = bool(conf.remember)
         conf.wndWidth = int(conf.wndWidth)
         conf.wndHeight = int(conf.wndHeight)
@@ -28,8 +29,8 @@ def loadConfigs(path: Path) -> Dict:
 
 
 def saveConfigs(path: Path, conf: Dict):
-    with path.open('w') as f:
-        json.dump(conf.to_dict(), f)
+    with path.open('w', encoding='utf8') as f:
+        json.dump(conf.to_dict(), f, ensure_ascii=False)
 
 
 conf = loadConfigs(PATHS.CONF)
