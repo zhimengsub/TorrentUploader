@@ -8,6 +8,7 @@ from utils.const import PATHS
 def loadConfigs(path: Path) -> Dict:
     conf = Dict(
         root='',
+        autoLogin=False,
         remember=False,
         username='',
         pass_='',
@@ -19,6 +20,7 @@ def loadConfigs(path: Path) -> Dict:
             read = Dict(json.load(f))
         conf.update(read)
         conf.root = str(conf.root)
+        conf.autoLogin = bool(conf.autoLogin)
         conf.remember = bool(conf.remember)
         conf.wndWidth = int(conf.wndWidth)
         conf.wndHeight = int(conf.wndHeight)

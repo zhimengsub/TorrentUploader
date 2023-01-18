@@ -9,11 +9,12 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTableView
 
 from core.client import Bangumi
-from errors import UploadTorrentException
+from errors import UploadTorrentException, LoginFailed, AccountTeamError
 from layouts.layoutMain import Ui_MainWindow  # 由Designer+pyuic生成
 from models.bangumi import MyTeam, UploadResponse
+from utils.bangumi import assert_team
 from utils.configs import saveConfigs, conf
-from utils.const import VERSION, PATHS
+from utils.const import VERSION, PATHS, TEAM_NAME
 from utils.gui.enums import PubType
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.filePicker import FilePicker
@@ -37,6 +38,10 @@ class WndMain(QMainWindow, Ui_MainWindow):
         # window settings
         self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
 
+        # exception handling
+        err_hook = UncaughtHook()
+        err_hook._exception_caught.connect(lambda msg: on_exception(self, msg))
+
         # sub windows
         self.wndPubPreviews = []  # type: list[WndPubPreview]
         # 其他初始化设置
@@ -47,6 +52,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.client = None  # type: Optional[Bangumi]
         self.myteam = None  # type: Optional[MyTeam]
         self.loggedIn = False
+
         self.picker = FilePicker(self)  # TODO 监视mp4、mkv->未做种，用qb自动生成种子放入未发布
         self.viewTodo.contextMenuEvent = lambda a0: self.onContextmenuEvent(PubType.Todo, PubType.Done, a0)
         self.viewDone.contextMenuEvent = lambda a0: self.onContextmenuEvent(PubType.Done, PubType.Todo, a0)
@@ -83,13 +89,31 @@ class WndMain(QMainWindow, Ui_MainWindow):
             # self.onLoggedIn(None)
             # self.client = Bangumi.login_with_password('bazingaw', '850462618')
 
-        # exception handling
-        err_hook = UncaughtHook()
-        err_hook._exception_caught.connect(lambda msg: on_exception(self, msg))
-        
+        if conf.autoLogin:
+            self.autoLogin()
+
     # utils
     def onPublishSucceed(self, row: int, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         self.updatePubtypeByRow(row, filterModel, newPubtype)
+
+    @wait_on_heavy_process
+    def autoLogin(self):
+        if not conf.autoLogin:
+            return
+
+        username = conf.username
+        pass_ = conf.pass_
+
+        try:
+            client = Bangumi.login_with_password(username, pass_)  # type: Bangumi
+            myteam = assert_team(client, TEAM_NAME)
+
+        except (LoginFailed, AccountTeamError, Exception) as e:
+            on_exception(self, '账号登录错误：\n', str(e))
+
+        else:
+            self.onLoggedIn(username, client, myteam)
+
 
     def onLoggedIn(self, username: str, client: Bangumi, myteam: MyTeam):
         self.client = client

@@ -1,41 +1,13 @@
-from pathlib import Path
-from typing import Union
-
-from httpx import Client
-
-from errors import LoginFailed, TorrentDuplicateError
-from _model import BangumiUser
-from utils.const import BANGUMI_MOE_HOST
-from utils.helpers import str2md5
-
-client = Client(base_url=BANGUMI_MOE_HOST)
+from core.client import Bangumi
+from errors import AccountTeamError
+from models.bangumi import MyTeam
+from utils.const import TEAM_NAME
 
 
-def login_by_password(username: str, password: str) -> BangumiUser:
-    """登录"""
-    # https://bangumi.moe/api/user/signin
-    response = client.post(
-        "/api/user/signin",
-        json={"username": username, "password": str2md5(password)},
-    )
-    response.raise_for_status()
-    json_data = response.json()
-    if not json_data["success"]:  # 若登录失败
-        raise LoginFailed("登录失败，请检查您输入的用户名或密码是否正确。")
-    return BangumiUser.parse_obj(
-        json_data["user"] | {"cookies": response.headers["set-cookie"]}
-    )
+def assert_team(client: Bangumi, team_name: str=TEAM_NAME) -> MyTeam:
+    for myteam in client.my_teams():
+        if myteam.name == team_name:
+            return myteam
+    raise AccountTeamError('登陆账户 ' + client.username + ' 不属于"' + team_name + '"团队！')
 
 
-def upload_torrent(path: Union[str, Path]):
-    """上传种子文件"""
-    # https://bangumi.moe/api/v2/torrent/upload
-    response = client.post(
-        "/api/user/signin",
-        files={"torrent": Path(path).open("rb")},
-    )
-    response.raise_for_status()
-    json_data = response.json()
-    if not json_data["success"]:  # 若上传错误
-        if "torrent same as" in json_data["message"]:
-            raise TorrentDuplicateError("种子文件重复，无法上传。")
