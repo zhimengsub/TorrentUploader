@@ -2,15 +2,14 @@ import sys
 from typing import Iterable
 
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, pyqtBoundSignal
-from PyQt5.QtGui import QTextCharFormat
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWidgets import QWidget, QSizePolicy
 
 from core.client import Bangumi
 from errors import ApplicationException
 from layouts.layoutPubPreview import Ui_PubEdit
 from models.bangumi import UploadResponse, MyTeam
 from utils.bangumi import PublishInfo
-from utils.gui.enums import IntroMode
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.helpers import wait_on_heavy_process
 from utils.gui.sources import ICONS
@@ -23,6 +22,14 @@ class WndPubPreview(QWidget, Ui_PubEdit):
         super().__init__()
         self.setupUi(self)
         self.retranslateUi(self)
+
+        self.webView = QWebEngineView(self.frame_3)
+        policy = self.webView.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Expanding)
+        policy.setVerticalPolicy(QSizePolicy.Expanding)
+        self.webView.setSizePolicy(policy)
+        self.frameIntro.addWidget(self.webView)
+
 
         # window settings
         self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
@@ -82,9 +89,7 @@ class WndPubPreview(QWidget, Ui_PubEdit):
 
     @pyqtSlot()
     def on_txtIntro_textChanged(self):
-        if self.introMode == IntroMode.Edit:
-            # print('update html')
-            self.pubInfo.intro_html = self.txtIntro.toPlainText()
+        self.pubInfo.intro_html = self.txtIntro.toPlainText()
 
     # @pyqtSlot()
     # def on_btnAddTag_clicked(self):
@@ -101,26 +106,17 @@ class WndPubPreview(QWidget, Ui_PubEdit):
     def setIntroEditMode(self):
         self.btnEditIntro.hide()
         self.btnPreviewIntro.show()
-        # clear format
-        self.txtIntro.setCurrentCharFormat(QTextCharFormat())
-        if self.pubInfo.intro_html:
-            self.txtIntro.setPlainText(self.pubInfo.intro_html)
-        self.txtIntro.setReadOnly(False)
+        self.webView.hide()
+        self.txtIntro.show()
+        self.txtIntro.setPlainText(self.pubInfo.intro_html)
 
     def setIntroPreviewMode(self):
-        # TODO use QWebView instead (try availability)
-        #
         self.btnPreviewIntro.hide()
         self.btnEditIntro.show()
-        self.txtIntro.setReadOnly(True)
-        if len(self.txtIntro.toPlainText()):
-            self.txtIntro.setHtml(self.pubInfo.intro_html)
+        self.txtIntro.hide()
+        self.webView.setHtml(self.pubInfo.intro_html)
+        self.webView.show()
 
-    @property
-    def introMode(self):
-        if self.txtIntro.isReadOnly():
-            return IntroMode.Preview
-        return IntroMode.Edit
 
 if __name__ == '__main__':
     from PyQt5.QtWidgets import QApplication

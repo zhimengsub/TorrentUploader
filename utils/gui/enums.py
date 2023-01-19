@@ -8,8 +8,3 @@ class PubType(enum.Enum):
     @property
     def value(self) -> int:
         return super().value
-
-
-class IntroMode(enum.Enum):
-    Edit = 0
-    Preview = 1

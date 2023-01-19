@@ -69,7 +69,7 @@
         </property>
        </widget>
       </item>
-      <item row="9" column="0">
+      <item row="10" column="0">
        <widget class="QFrame" name="frame_2">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -126,21 +126,14 @@
         </layout>
        </widget>
       </item>
-      <item row="9" column="1">
-       <widget class="QTextEdit" name="txtIntro">
-        <property name="lineWrapMode">
-         <enum>QTextEdit::NoWrap</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="11" column="0">
+      <item row="12" column="0">
        <widget class="QLabel" name="labTeam">
         <property name="text">
          <string>团队</string>
         </property>
        </widget>
       </item>
-      <item row="11" column="1">
+      <item row="12" column="1">
        <widget class="QLineEdit" name="txtTeam">
         <property name="readOnly">
          <bool>true</bool>
@@ -177,6 +170,20 @@
          </item>
         </layout>
        </widget>
+      </item>
+      <item row="10" column="1">
+       <layout class="QVBoxLayout" name="frameIntro">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QPlainTextEdit" name="txtIntro">
+          <property name="lineWrapMode">
+           <enum>QPlainTextEdit::NoWrap</enum>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>

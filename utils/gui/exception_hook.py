@@ -53,6 +53,7 @@ class UncaughtHook(QtCore.QObject):
             self._exception_caught.emit(log_msg)
 
 # TODO log写入文件，并单独做一个log窗口，防止错误信息太长显示不全。
+#  所有在消息框弹出的报错不显示具体内容
 def on_exception(parent: QWidget, *args, sep=''):
     restoreOverrideCursor()
     log_msg = sep.join(args)
