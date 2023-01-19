@@ -61,10 +61,10 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.root = None  # type: Optional[Path]
         # sourceModel读取数据库，不直接显示
         self.sourceModel = TorrentTableModel(self)
-        self.sourceModel.updatedRoot.connect(lambda: [self.setViewSize(self.viewTodo, self.filterModels[PubType.Todo]),
-                                                      self.setViewSize(self.viewDone, self.filterModels[PubType.Done])])
-        self.sourceModel.torrentChanged.connect(lambda: [self.setViewSize(self.viewTodo, self.filterModels[PubType.Todo]),
-                                                         self.setViewSize(self.viewDone, self.filterModels[PubType.Done])])
+        self.sourceModel.updatedRoot.connect(lambda: [self.updateView(self.viewTodo, self.filterModels[PubType.Todo]),
+                                                      self.updateView(self.viewDone, self.filterModels[PubType.Done])])
+        self.sourceModel.torrentChanged.connect(lambda: [self.updateView(self.viewTodo, self.filterModels[PubType.Todo]),
+                                                         self.updateView(self.viewDone, self.filterModels[PubType.Done])])
 
         # 把sourceModel按pubtype过滤后分别显示在各自TableView里
         self.filterModels = {
@@ -73,22 +73,24 @@ class WndMain(QMainWindow, Ui_MainWindow):
         for filterModel in self.filterModels.values():
             filterModel.setSourceModel(self.sourceModel)
 
-        print('proxy model')
+        # print('proxy model')
         self.viewTodo.setModel(self.filterModels[PubType.Todo])
+        self.viewTodo.setSortingEnabled(True)
+        self.viewTodo.sortByColumn(TDB.COL_MTIME, Qt.DescendingOrder)
+
         self.viewDone.setModel(self.filterModels[PubType.Done])
+        self.viewDone.setSortingEnabled(True)
+        self.viewDone.sortByColumn(TDB.COL_RELPATH, Qt.DescendingOrder)
         # for debug:
         # print('source model')
         # self.viewTodo.setModel(self.sourceModel)
         # self.viewDone.setModel(self.sourceModel)
 
-        self.loadFromConfigs()
-
-        if DEBUG:
-            # self.updateRoot(Path(r"D:\字幕组\成片"))
-            self.updateRoot(Path(r"D:\Coding\Pycharm\PyProjects\Aegisub\TorrentUploader\test"))
-            # self.onLoggedIn(None)
-            # self.client = Bangumi.login_with_password('bazingaw', '850462618')
-
+        # load configs
+        if conf.wndWidth != -1:
+            self.resize(conf.wndWidth, conf.wndHeight)
+        if conf.root:
+            self.updateRoot(Path(conf.root))
         if conf.autoLogin:
             self.autoLogin()
 
@@ -135,22 +137,21 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     @wait_on_heavy_process
     def updatePubtypeByRow(self, row: int, filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        idx = filterModel.index(row, 0)
-        idx = idx.siblingAtColumn(TDB.COL_NAME)
+        idx = filterModel.index(row, TDB.COL_NAME)
         self.sourceModel.updatePubtype(filterModel.mapToSource(idx), newPubtype)
-        self.setAllViewSize()
+        self.updateAllViews()
 
     @wait_on_heavy_process
     def updatePubtypeBySelection(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         self.sourceModel.updatePubtypes([filterModel.mapToSource(idx.siblingAtColumn(TDB.COL_NAME)) for idx in view.selectedIndexes()], newPubtype)
-        self.setAllViewSize()
+        self.updateAllViews()
 
     @wait_on_heavy_process
     def updateRoot(self, root: Path):
-        self.labRootDisp.setText(str(root))
         self.sourceModel.updateRoot(root)
         self.root = root
         conf.root = str(root)
+        self.labRootDisp.setText(str(root))
 
     # Action slots
     def onPubMoreAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
@@ -222,7 +223,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot()
     def on_btnTest_clicked(self):
-        print(self.client.my_teams())
+        self.onPublishSucceed(0, self.filterModels[PubType.Done], PubType.Todo)
 
     @pyqtSlot()
     def on_btnBrowse_clicked(self):
@@ -252,23 +253,20 @@ class WndMain(QMainWindow, Ui_MainWindow):
         a0.accept()
 
     # Misc
-    def setAllViewSize(self):
-        self.setViewSize(self.viewTodo, self.filterModels[PubType.Todo])
-        self.setViewSize(self.viewDone, self.filterModels[PubType.Done])
+    def updateAllViews(self):
+        self.updateView(self.viewTodo, self.filterModels[PubType.Todo])
+        self.updateView(self.viewDone, self.filterModels[PubType.Done])
 
     @staticmethod
-    def setViewSize(view: QTableView, model: QAbstractItemModel):
-        """设置View显示的Column"""
-        for col in range(1, model.columnCount()):
-            view.hideColumn(col)
-        view.resizeColumnsToContents()
-        view.resizeRowsToContents()
+    def updateView(view: QTableView, model: TorrentFilterTableModel):
+        """更新View显示内容"""
+        view.hideColumn(TDB.COL_PUBTYPE)  # 必须每次更新数据时都调用
+        model.update_headers()  # 必须每次更新数据时都调用
+        view.resizeColumnToContents(TDB.COL_NAME)
+        view.resizeColumnToContents(TDB.COL_MTIME)
+        # view.resizeColumnsToContents()
+        # view.resizeRowsToContents()
 
-    def loadFromConfigs(self):
-        if conf.wndWidth != -1:
-            self.resize(conf.wndWidth, conf.wndHeight)
-        if conf.root:
-            self.updateRoot(Path(conf.root))
 
     @staticmethod
     def updateConfigs(width: int, height: int):

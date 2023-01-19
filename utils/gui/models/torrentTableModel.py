@@ -29,6 +29,8 @@ class TorrentTableModel(QSqlTableModel):
         self.root = root
         # watch `root` and sync current file system status to database
         self.manager.updateRoot(root)
+        # update `mtime` field
+        self.manager.db.updateAllMtimes(root)
         # change to table `root`
         self.setTable(str(self.root))
         # update model
