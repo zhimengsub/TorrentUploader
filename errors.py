@@ -25,6 +25,18 @@ class TorrentDuplicateError(UploadTorrentException):
     """种子重复"""
 
 
+class PredictionNotFoundInResponse(ApplicationException):
+    """没有在上传种子的响应中找到预测标题"""
+    def __init__(self):
+        super().__init__('没有在上传种子的响应中找到预测标题')
+
+
+class BestPredictionNotFound(ApplicationException):
+    """未找到最匹配的预测标题"""
+    def __init__(self):
+        super().__init__('未找到最匹配的预测标题')
+
+
 class PublishFailed(ApplicationException):
     """发布失败"""
 

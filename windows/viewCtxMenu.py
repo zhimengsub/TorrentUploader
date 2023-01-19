@@ -9,11 +9,10 @@ class ViewContextMenu(QMenu):
         super().__init__(parent)
         self.pubtype = pubtype
         self.actPubMore = QAction(ICONS.PUBMORE, '编辑并发布...', parent)
-        self.actPubMore.setStatusTip('进一步编辑后再发布')
+        self.actPubMore.setStatusTip('进一步编辑后再发布（一次只能选择一行）')
 
         self.actPubDirect = QAction(ICONS.PUBDIRECT, '一键发布', parent)
-        self.actPubDirect.setStatusTip('不进行确认，直接发布')
-        self.actPubDirect.setEnabled(False)  # TODO debug only
+        self.actPubDirect.setStatusTip('不进行确认，直接发布（可以一次处理多行）')
 
         self.actMoveTo = QAction(ICONS.MOVETO, '移动到' + ('已发布' if pubtype == PubType.Todo else '待发布'), parent)
 

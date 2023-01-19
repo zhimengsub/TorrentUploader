@@ -125,7 +125,7 @@ class Bangumi(Uploader, Net):
         if team_id:
             data = {"team_id": team_id}
         response = self.post(
-            "/api/v2/torrent/upload", data=data, files={"file": path.open("rb")}
+            "/api/v2/torrent/upload", data=data, files={"file": path.open("rb")}, timeout=None
         )
         response.raise_for_status()
         response_obj = BangumiResponse.parse_raw(response.text)
@@ -184,6 +184,7 @@ class Bangumi(Uploader, Net):
         response = self.post(
             "/api/torrent/add",
             json=jsondata,
+            timeout=None
         )
         response.raise_for_status()
         response_obj = BangumiResponse.parse_raw(response.text)

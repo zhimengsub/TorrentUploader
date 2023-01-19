@@ -1,16 +1,15 @@
 import sys
-from typing import Iterable, Optional, Union
+from typing import Iterable
 
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, pyqtBoundSignal
 from PyQt5.QtGui import QTextCharFormat
 from PyQt5.QtWidgets import QWidget
-from addict import Dict
-from bs4 import BeautifulSoup
 
 from core.client import Bangumi
 from errors import ApplicationException
 from layouts.layoutPubPreview import Ui_PubEdit
-from models.bangumi import UploadResponse, Torrent, MyTeam, Tag
+from models.bangumi import UploadResponse, MyTeam
+from utils.bangumi import PublishInfo
 from utils.gui.enums import IntroMode
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.helpers import wait_on_heavy_process
@@ -37,89 +36,39 @@ class WndPubPreview(QWidget, Ui_PubEdit):
         self.txtTeam.setReadOnly(True)
 
         self.client = client
-        self.myteam = myteam  # TODO make optional
-        # TODO remove self.torrent
-        self.torrent = None  # type: Optional[Torrent]
-        self.pubInfo = Dict(dict(
-            category_tag_id='',
-            file_id=resp.file_id,
-            title=title,
-            introduction='',
-            team_id=myteam.id,
-            tags=[],
-            teamsync=True
-        ))
+        # TODO make myteam optional
+        self.pubInfo = PublishInfo(myteam, resp, title)
         # TODO comboCat init different categories
-
-        self.loadSettingsByTorrent(resp)
-
+        self.pubInfo.loadInfoFromBestPrediction(resp, allow_edit=True)
+        self.setUiTextsByInfo(**self.pubInfo.to_ui_texts())
         self.setIntroEditMode()
 
     """Utils"""
-    def loadSettingsByTorrent(self, resp: UploadResponse):
-        """update members and ui text"""
-        if not resp.torrents:
-            return
-        # print(resp.torrents)
-        torrent = resp.torrents[0]
-        # try to find best match in old uploads
-        for torrent in resp.torrents:
-            if torrent.title in self.pubInfo.title:
-                break
-        self.torrent = torrent
-
-        parsed = BeautifulSoup(torrent.introduction, 'html.parser')
-        self.updatePublishInfo(introduction=parsed.prettify())
-
-        category = torrent.category_tag.locale.zh_cn
-        tagnames = [tag.locale.zh_cn or tag.name for tag in torrent.tags]
-        intro = self.pubInfo.introduction
-        team = self.myteam.name
-        self.setUiTextsByInfo(self.pubInfo.title, category, tagnames, intro, team)
-
-    def getCategoryId(self):
-        # TODO get category ids by name
-        if self.torrent:
-            return self.torrent.category_tag_id
-        raise NotImplementedError('getCategoryIdByName not implemented!')
-
-    def getTagIds(self) -> list[Union[Tag, str]]:
-        # TODO get tag ids by name (split by ';' then strip space)
-        if self.torrent:
-            return self.torrent.tag_ids
-        raise NotImplementedError('getTagIdsByName not implemented!')
-
-    def getTeamId(self) -> str:
-        # TODO get team id by name
-        return self.myteam.id
-
-    def updatePublishInfo(self, **kwargs):
-        """Generete info for publish"""
-        self.pubInfo.update(**kwargs)
-
     @wait_on_heavy_process
     def publish(self):
-        self.client.publish(**self.pubInfo)
+        self.client.publish(**self.pubInfo.to_publish_info())
 
     # def addUiTags(self, tagnames: Iterable[str]):
     #     # remove anything after btnAddTag, append new LineEdit, horizontal policy set to preferred, add again
+    #     self.pubInfo.set_tags_by_name(tagnames)
     #     ...
 
     """Slots"""
     @pyqtSlot()
     def on_btnPublish_clicked(self):
         try:
-            self.updatePublishInfo(category_tag_id=self.getCategoryId(),
-                                   title=self.txtTitle.text(),
-                                   tags=self.getTagIds(),
-                                   team_id=self.getTeamId())
+            self.pubInfo.title = self.txtTitle.text()
             self.publish()
         except ApplicationException as e:
-            # TODO 提示当前种子文件是哪一个
+            # TODO 提示当前匹配的历史种子文件是哪一个
             on_exception(self, str(e))
         else:
             self.published.emit()
             self.close()
+
+    @pyqtSlot(str)
+    def on_comboCat_currentTextChanged(self, text):
+        self.pubInfo.set_category_by_name(text)
 
     @pyqtSlot()
     def on_btnEditIntro_clicked(self):
@@ -135,7 +84,7 @@ class WndPubPreview(QWidget, Ui_PubEdit):
     def on_txtIntro_textChanged(self):
         if self.introMode == IntroMode.Edit:
             # print('update html')
-            self.updatePublishInfo(introduction=self.txtIntro.toPlainText())
+            self.pubInfo.intro_html = self.txtIntro.toPlainText()
 
     # @pyqtSlot()
     # def on_btnAddTag_clicked(self):
@@ -154,8 +103,8 @@ class WndPubPreview(QWidget, Ui_PubEdit):
         self.btnPreviewIntro.show()
         # clear format
         self.txtIntro.setCurrentCharFormat(QTextCharFormat())
-        if self.pubInfo.introduction:
-            self.txtIntro.setPlainText(self.pubInfo.introduction)
+        if self.pubInfo.intro_html:
+            self.txtIntro.setPlainText(self.pubInfo.intro_html)
         self.txtIntro.setReadOnly(False)
 
     def setIntroPreviewMode(self):
@@ -165,7 +114,7 @@ class WndPubPreview(QWidget, Ui_PubEdit):
         self.btnEditIntro.show()
         self.txtIntro.setReadOnly(True)
         if len(self.txtIntro.toPlainText()):
-            self.txtIntro.setHtml(self.pubInfo.introduction)
+            self.txtIntro.setHtml(self.pubInfo.intro_html)
 
     @property
     def introMode(self):
@@ -175,7 +124,9 @@ class WndPubPreview(QWidget, Ui_PubEdit):
 
 if __name__ == '__main__':
     from PyQt5.QtWidgets import QApplication
+    from utils.gui.sources import init_icons
     app = QApplication(sys.argv)
-    wnd = WndPubPreview(None, None)
-    wnd.show()
+    init_icons()
+    wnd = WndPubPreview(None, None, None)
+    wnd.exec()
     sys.exit(app.exec_())

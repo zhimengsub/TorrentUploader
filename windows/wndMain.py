@@ -1,23 +1,23 @@
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSlot, QModelIndex
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTableView
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTableView, QMessageBox
 
 from core.client import Bangumi
 from errors import UploadTorrentException, LoginFailed, AccountTeamError
 from layouts.layoutMain import Ui_MainWindow  # 由Designer+pyuic生成
-from models.bangumi import MyTeam, UploadResponse
-from utils.bangumi import assert_team
+from models.bangumi import MyTeam
+from utils.bangumi import assert_team, PublishInfo
 from utils.configs import saveConfigs, conf
 from utils.const import VERSION, PATHS, TEAM_NAME
 from utils.gui.enums import PubType
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.filePicker import FilePicker
-from utils.gui.helpers import wait_on_heavy_process
+from utils.gui.helpers import wait_on_heavy_process, setOverrideCursorToWait, restoreOverrideCursor
 from utils.gui.models.torrentFilterTableModel import TorrentFilterTableModel
 from utils.gui.models.torrentTableModel import TorrentTableModel
 from utils.gui.sources import ICONS, init_icons
@@ -95,8 +95,11 @@ class WndMain(QMainWindow, Ui_MainWindow):
             self.autoLogin()
 
     """Utils"""
-    def onPublishSucceed(self, row: int, filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        self.updatePubtypeByRow(row, filterModel, newPubtype)
+    def onPublishSucceed(self, row: Union[list[int], int], filterModel: TorrentFilterTableModel, newPubtype: PubType):
+        if isinstance(row, list):
+            self.updatePubtypeByRows(row, filterModel, newPubtype)
+        else:
+            self.updatePubtypeByRow(row, filterModel, newPubtype)
 
     @wait_on_heavy_process
     def autoLogin(self):
@@ -116,24 +119,11 @@ class WndMain(QMainWindow, Ui_MainWindow):
         else:
             self.onLoggedIn(username, client, myteam)
 
-
     def onLoggedIn(self, username: str, client: Bangumi, myteam: MyTeam):
         self.client = client
         self.myteam = myteam
         self.labAccntDisp.setText(username)
         self.loggedIn = True
-
-    @wait_on_heavy_process
-    def uploadTorrent(self, path: Path) -> UploadResponse:
-        try:
-            resp = self.client.upload_torrent(path, self.myteam.id)
-            # if not resp.torrents:
-            #     raise UploadTorrentException('无法读取已上传的种子信息，resp的种子列表为空！')
-        except UploadTorrentException as e:
-            on_exception(self, str(e))
-        else:
-            print('upload success')
-            return resp
 
     @wait_on_heavy_process
     def updatePubtypeByRow(self, row: int, filterModel: TorrentFilterTableModel, newPubtype: PubType):
@@ -142,8 +132,16 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.updateAllViews()
 
     @wait_on_heavy_process
+    def updatePubtypeByRows(self, rows: list[int], filterModel: TorrentFilterTableModel, newPubtype: PubType):
+        idxes = [filterModel.index(row, TDB.COL_NAME) for row in rows]
+        src_idxes = [filterModel.mapToSource(idx) for idx in idxes]
+        self.sourceModel.updatePubtypes(src_idxes, newPubtype)
+        self.updateAllViews()
+
+    @wait_on_heavy_process
     def updatePubtypeBySelection(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        self.sourceModel.updatePubtypes([filterModel.mapToSource(idx.siblingAtColumn(TDB.COL_NAME)) for idx in view.selectedIndexes()], newPubtype)
+        idxes = [idx for idx in view.selectedIndexes() if idx.column() == TDB.COL_NAME]
+        self.sourceModel.updatePubtypes([filterModel.mapToSource(idx) for idx in idxes], newPubtype)
         self.updateAllViews()
 
     @wait_on_heavy_process
@@ -154,14 +152,14 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.labRootDisp.setText(str(root))
 
     """Action slots"""
+    @wait_on_heavy_process
     def onPubMoreAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         # update pubtype if publish success
-        assert self.loggedIn, '请先登录！'
         idxes = view.selectedIndexes()
         if not idxes:
             return
+        assert self.loggedIn, '请先登录！'
         # only publish the first selection
-        # TODO publish multiple selections together
         idx = idxes[0]
         row = idx.row()
         view.selectRow(row)
@@ -169,8 +167,11 @@ class WndMain(QMainWindow, Ui_MainWindow):
         nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
         relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
         path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
-        resp = self.uploadTorrent(path)
-        if not resp:
+        try:
+            resp = self.client.upload_torrent(path, self.myteam.id)
+            assert resp, 'resp 为空!'
+        except (UploadTorrentException, Exception) as e:
+            on_exception(self, '文件上传失败 ' + str(type(e)) + '\n', str(e))
             return
 
         while path.suffix:
@@ -179,14 +180,54 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
         wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
-        wndPubPreview.destroyed.connect(lambda: self.wndPubPreviews.remove(wndPubPreview))
         wndPubPreview.published.connect(lambda: self.onPublishSucceed(row, filterModel, newPubtype))
         self.wndPubPreviews.append(wndPubPreview)
         wndPubPreview.show()
 
-    def onPubDirectAction(self):
-        # TODO
-        ...
+    def onPubDirectAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
+        # update pubtype if publish success
+        idxes = [idx for idx in view.selectedIndexes() if idx.column() == TDB.COL_NAME]
+        if not idxes:
+            return
+        assert self.loggedIn, '请先登录！'
+        # publish multiple selections together
+
+        for idx in idxes:
+            setOverrideCursorToWait()
+            row = idx.row()
+
+            nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
+            relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
+            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            try:
+                resp = self.client.upload_torrent(path, self.myteam.id)
+                assert resp, 'resp 为空!'
+            except (UploadTorrentException, Exception) as e:
+                on_exception(self, nameIdx.data() + ' 文件上传失败 ' + str(type(e)) + '\n', str(e))
+                continue
+
+            while path.suffix:
+                path = path.with_suffix('')
+            title = path.stem
+
+            try:
+                pubInfo = PublishInfo(self.myteam, resp, title)
+                pubInfo.loadInfoFromBestPrediction(resp, allow_edit=False)
+
+                self.client.publish(**pubInfo.to_publish_info())
+            except Exception as e:
+                # TODO 如果出错跳转到编辑窗口，如果已经打开了编辑窗口，则暂时阻塞循环
+                restoreOverrideCursor()
+                res = QMessageBox.warning(None, '自动发布失败', nameIdx.data() + ' 发布失败\n' + str(type(e)) + '\n' + str(e) + '\n是否打开手动编辑窗口？', QMessageBox.Yes | QMessageBox.No)
+                if res == QMessageBox.Yes:
+                    wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
+                    wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
+                    wndPubPreview.published.connect(lambda: self.onPublishSucceed(row, filterModel, newPubtype))
+                    self.wndPubPreviews.append(wndPubPreview)
+                    wndPubPreview.show()
+                continue
+            else:
+                self.onPublishSucceed(row, filterModel, newPubtype)
 
     def onMoveToAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         self.updatePubtypeBySelection(view, filterModel, newPubtype)
@@ -202,7 +243,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
     """Context Menu"""
     def connectContextmenuActions(self, ctxMenu: ViewContextMenu, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         # TODO connect ctx menu action signals
-        ctxMenu.actPubMore.triggered.connect(lambda: self.onPubMoreAction(view, filterModel, newPubtype))
+        ctxMenu.actPubMore.triggered.connect(lambda: self.onPubMoreAction(view, filterModel, PubType.Done))
+        ctxMenu.actPubDirect.triggered.connect(lambda: self.onPubDirectAction(view, filterModel, PubType.Done))
         ctxMenu.actMoveTo.triggered.connect(lambda: self.onMoveToAction(view, filterModel, newPubtype))
         ctxMenu.actOpen.triggered.connect(lambda: self.onOpenAction(view))
 
