@@ -4,8 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt5 import QtGui
-from PyQt5.QtCore import Qt, pyqtSlot, QAbstractItemModel, QModelIndex
-from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, pyqtSlot, QModelIndex
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTableView
 
 from core.client import Bangumi
@@ -21,6 +20,7 @@ from utils.gui.filePicker import FilePicker
 from utils.gui.helpers import wait_on_heavy_process
 from utils.gui.models.torrentFilterTableModel import TorrentFilterTableModel
 from utils.gui.models.torrentTableModel import TorrentTableModel
+from utils.gui.sources import ICONS, init_icons
 from utils.gui.torrentDatabase import TorrentDatabase as TDB
 from windows.viewCtxMenu import ViewContextMenu
 from windows.wndLogin import WndLogin
@@ -33,7 +33,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.retranslateUi(self)
         self.setWindowTitle(self.windowTitle() + ' ver. ' + VERSION)
-        self.setWindowIcon(QIcon(str(PATHS.ICON)))
+        self.setWindowIcon(ICONS.MAIN)
 
         # window settings
         self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
@@ -45,7 +45,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         # sub windows
         self.wndPubPreviews = []  # type: list[WndPubPreview]
         # 其他初始化设置
-        DEBUG = False
+        DEBUG = True
         # self.btnLogin.setEnabled(False)
         self.btnTest.setVisible(DEBUG)
 
@@ -283,6 +283,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    init_icons()
     mainwindow = WndMain()
     mainwindow.show()
     sys.exit(app.exec_())  # 如果有多线程，需要os._exit(app.exec_())

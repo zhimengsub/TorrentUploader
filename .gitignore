@@ -333,4 +333,3 @@ cython_debug/
 *.db
 buildLayouts.py
 *.json
-*.ico

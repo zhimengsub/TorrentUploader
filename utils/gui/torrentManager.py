@@ -56,7 +56,7 @@ class TorrentManager(QObject):
             raise DirectoryWatchFailed(fails)
 
     def isTorrentChanged(self, watched_dir: Path) -> tuple[bool, set[str], set[str]]:
-        # determin if torrent file has changed
+        # determine if torrent file has changed by doing some set calculation
         relpath = watched_dir.relative_to(self.root)
         old_torrents = self.db.selectNamesByPath(self.root, relpath)
         new_torrents = self.torrents(watched_dir)
@@ -90,7 +90,8 @@ class TorrentManager(QObject):
         self.db.createTableIfNotExist(self.root)
         # watch root and its subfolders
         self.watchDirRecursively(self.root, subdirs_only=False)
-        # and manually sync all torrent to database
+        # considering there may be changes when this tool is offline,
+        # manually sync all torrent to database
         for dir in self.watcher.directories():
             dirpath = Path(dir)
             res, added, removed = self.isTorrentChanged(dirpath)

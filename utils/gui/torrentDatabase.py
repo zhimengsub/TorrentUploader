@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, Union
 
 from PyQt5.QtSql import QSqlDatabase, QSqlError
 
@@ -92,17 +92,17 @@ class TorrentDatabase(QSqlDatabase):
         self.exec(f'UPDATE "{root}" SET mtime={newMtime} WHERE name="{name}" AND relpath="{relpath}";')
         self.raiseOnError()
 
-    # def updatePubtype(self, root: Path, name: str, relpath: Path, newPubtype: PubType):
-    #     self.exec(f'UPDATE "{root}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
-    #     self.raiseOnError()
-    #
-    # def updatePubtypes(self, root: Path, names: Iterable[str], relpaths: Iterable[Union[Path, str]], newPubtype: PubType):
-    #     if not self.transaction():
-    #         raise SqlError('transaction() returns False!')
-    #     for name, relpath in zip(names, relpaths):
-    #         self.exec(f'UPDATE "{root}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
-    #     self.commit()
-    #     self.raiseOnError()
+    def updatePubtype(self, root: Path, name: str, relpath: Path, newPubtype: PubType):
+        self.exec(f'UPDATE "{root}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
+        self.raiseOnError()
+
+    def updatePubtypes(self, root: Path, names: Iterable[str], relpaths: Iterable[Union[Path, str]], newPubtype: PubType):
+        if not self.transaction():
+            raise SqlError('transaction() returns False!')
+        for name, relpath in zip(names, relpaths):
+            self.exec(f'UPDATE "{root}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
+        self.commit()
+        self.raiseOnError()
 
     def updateAllMtimes(self, root: Path):
         self.batch_start()

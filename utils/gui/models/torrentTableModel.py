@@ -38,15 +38,25 @@ class TorrentTableModel(QSqlTableModel):
         self.updatedRoot.emit()
 
     def updatePubtype(self, index: QModelIndex, newPubtype: PubType):
-        self.updatePubtypes([index], newPubtype)
+        nameIndex = index.siblingAtColumn(TDB.COL_NAME)
+        relpathIndex = index.siblingAtColumn(TDB.COL_RELPATH)
+
+        name = nameIndex.data()
+        relpath = relpathIndex.data()
+        self.manager.db.updatePubtype(self.root, name, relpath, newPubtype)
+        self.select()
 
     def updatePubtypes(self, indexes: Iterable[QModelIndex], newPubtype: PubType):
+        names = []
+        relpaths = []
         for index in indexes:
-            pubtypeIndex = index.siblingAtColumn(TDB.COL_PUBTYPE)
-            self.setData(pubtypeIndex, newPubtype.value)
+            nameIndex = index.siblingAtColumn(TDB.COL_NAME)
+            relpathIndex = index.siblingAtColumn(TDB.COL_RELPATH)
+            names.append(nameIndex.data())
+            relpaths.append(relpathIndex.data())
 
-        if not self.submitAll():
-            self.raiseOnError()
+        self.manager.db.updatePubtypes(self.root, names, relpaths, newPubtype)
+        self.select()
 
     def raiseOnError(self):
         err = self.lastError()

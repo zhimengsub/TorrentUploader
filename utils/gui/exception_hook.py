@@ -52,7 +52,7 @@ class UncaughtHook(QtCore.QObject):
             # trigger message box show
             self._exception_caught.emit(log_msg)
 
-
+# TODO log写入文件，并单独做一个log窗口，防止错误信息太长显示不全。
 def on_exception(parent: QWidget, *args, sep=''):
     restoreOverrideCursor()
     log_msg = sep.join(args)

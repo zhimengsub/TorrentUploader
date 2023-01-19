@@ -2,7 +2,7 @@ import sys
 from typing import Iterable, Optional, Union
 
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, pyqtBoundSignal
-from PyQt5.QtGui import QTextCharFormat, QIcon
+from PyQt5.QtGui import QTextCharFormat
 from PyQt5.QtWidgets import QWidget
 from addict import Dict
 from bs4 import BeautifulSoup
@@ -11,10 +11,10 @@ from core.client import Bangumi
 from errors import ApplicationException
 from layouts.layoutPubPreview import Ui_PubEdit
 from models.bangumi import UploadResponse, Torrent, MyTeam, Tag
-from utils.const import PATHS
 from utils.gui.enums import IntroMode
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.helpers import wait_on_heavy_process
+from utils.gui.sources import ICONS
 
 
 class WndPubPreview(QWidget, Ui_PubEdit):
@@ -27,7 +27,7 @@ class WndPubPreview(QWidget, Ui_PubEdit):
 
         # window settings
         self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
-        self.setWindowIcon(QIcon(str(PATHS.ICON)))
+        self.setWindowIcon(ICONS.MAIN)
 
         # exception handling
         err_hook = UncaughtHook()

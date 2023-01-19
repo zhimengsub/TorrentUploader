@@ -11,6 +11,7 @@ from utils.configs import conf, saveConfigs
 from utils.const import PATHS, TEAM_NAME
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.helpers import wait_on_heavy_process
+from utils.gui.sources import ICONS
 
 
 class WndLogin(QDialog, Ui_dlgLogin):
@@ -21,7 +22,7 @@ class WndLogin(QDialog, Ui_dlgLogin):
         self.setupUi(self)
         self.retranslateUi(self)
         self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
-        self.setWindowIcon(QIcon(str(PATHS.ICON)))
+        self.setWindowIcon(ICONS.MAIN)
 
         # exception handling
         err_hook = UncaughtHook()
