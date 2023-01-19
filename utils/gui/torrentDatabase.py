@@ -67,13 +67,15 @@ class TorrentDatabase(QSqlDatabase):
     #     self.raiseOnError()
 
     def addItem(self, root: Path, name: str, relpath: Path, pubtype: PubType=PubType.Todo):
-        self.exec(f'INSERT INTO "{root}"(name, relpath, pubtype) VALUES("{name}", "{relpath}", {pubtype.value});')
+        mtime = get_mtime(root / relpath / name)
+        self.exec(f'INSERT INTO "{root}"(name, relpath, pubtype, mtime) VALUES("{name}", "{relpath}", {pubtype.value}, {mtime});')
         self.raiseOnError()
 
     def addItems(self, root: Path, names: Iterable[str], relpath: Path, pubtype: PubType=PubType.Todo):
         self.batch_start()
         for name in names:
-            self.exec(f'INSERT INTO "{root}"(name, relpath, pubtype) VALUES("{name}", "{relpath}", {pubtype.value});')
+            mtime = get_mtime(root / relpath / name)
+            self.exec(f'INSERT INTO "{root}"(name, relpath, pubtype, mtime) VALUES("{name}", "{relpath}", {pubtype.value}, {mtime});')
         self.commit()
         self.raiseOnError()
 

@@ -55,7 +55,7 @@ class WndPubPreview(QWidget, Ui_PubEdit):
 
         self.setIntroEditMode()
 
-    # utils
+    """Utils"""
     def loadSettingsByTorrent(self, resp: UploadResponse):
         """update members and ui text"""
         if not resp.torrents:
@@ -105,7 +105,7 @@ class WndPubPreview(QWidget, Ui_PubEdit):
     #     # remove anything after btnAddTag, append new LineEdit, horizontal policy set to preferred, add again
     #     ...
 
-    # slots
+    """Slots"""
     @pyqtSlot()
     def on_btnPublish_clicked(self):
         try:
@@ -141,12 +141,12 @@ class WndPubPreview(QWidget, Ui_PubEdit):
     # def on_btnAddTag_clicked(self):
     #     ...
 
-    # misc
-    def setUiTextsByInfo(self, title: str, category: str, tagnames: Iterable[str], intro: str, team: str):
+    """misc"""
+    def setUiTextsByInfo(self, title: str, category: str, tagnames: Iterable[str], intro_html: str, team: str):
         self.txtTitle.setText(title)
         self.comboCat.addItem(category)
         self.txtTags.setText('; '.join(tagnames))
-        self.txtIntro.setPlainText(intro)
+        self.txtIntro.setPlainText(intro_html)
         self.txtTeam.setText(team)
 
     def setIntroEditMode(self):

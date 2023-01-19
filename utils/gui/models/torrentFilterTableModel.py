@@ -27,5 +27,7 @@ class TorrentFilterTableModel(QSortFilterProxyModel):
             # 修改时间显示格式
             mtime = super().data(index)
             # 默认显示格式为yy/mm/dd h:m
-            return QDateTime(datetime.datetime.fromtimestamp(mtime))
+            if mtime:
+                return QDateTime(datetime.datetime.fromtimestamp(mtime))
+            return ''
         return super().data(index, role)

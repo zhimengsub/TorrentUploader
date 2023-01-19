@@ -94,7 +94,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         if conf.autoLogin:
             self.autoLogin()
 
-    # utils
+    """Utils"""
     def onPublishSucceed(self, row: int, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         self.updatePubtypeByRow(row, filterModel, newPubtype)
 
@@ -153,7 +153,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         conf.root = str(root)
         self.labRootDisp.setText(str(root))
 
-    # Action slots
+    """Action slots"""
     def onPubMoreAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         # update pubtype if publish success
         assert self.loggedIn, '请先登录！'
@@ -199,7 +199,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
             # only open the first file in selection
             break
 
-    # Context Menu
+    """Context Menu"""
     def connectContextmenuActions(self, ctxMenu: ViewContextMenu, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         # TODO connect ctx menu action signals
         ctxMenu.actPubMore.triggered.connect(lambda: self.onPubMoreAction(view, filterModel, newPubtype))
@@ -214,7 +214,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.connectContextmenuActions(ctxMenu, view, filterModel, newPubtype)
         ctxMenu.exec(a0.globalPos())
 
-    # Slots
+    """Slots"""
     @pyqtSlot()
     def on_btnLogin_clicked(self):
         wndLogin = WndLogin()
@@ -244,7 +244,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
     def on_viewDone_doubleClicked(self, index: QModelIndex):
         self.on_view_doubleClicked(index)
 
-    # Events
+    """Events"""
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         self.updateConfigs(a0.size().width(), a0.size().height())
 
@@ -252,7 +252,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
         saveConfigs(PATHS.CONF, conf)
         a0.accept()
 
-    # Misc
+    """Misc"""
     def updateAllViews(self):
         self.updateView(self.viewTodo, self.filterModels[PubType.Todo])
         self.updateView(self.viewDone, self.filterModels[PubType.Done])

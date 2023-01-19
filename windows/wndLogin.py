@@ -1,5 +1,4 @@
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, pyqtBoundSignal, Qt
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog
 
 from core.client import Bangumi
@@ -30,6 +29,7 @@ class WndLogin(QDialog, Ui_dlgLogin):
 
         self.loadFromConfigs()
 
+    """Utils"""
     def loadFromConfigs(self):
         self.chkAutoLog.setChecked(conf.autoLogin)
         self.chkRem.setChecked(conf.remember)
@@ -46,6 +46,7 @@ class WndLogin(QDialog, Ui_dlgLogin):
         else:
             conf.pass_ = ''
 
+    """Slots"""
     @pyqtSlot(int)
     def on_chkAutoLog_stateChanged(self, state: int):
         if state == 2:
