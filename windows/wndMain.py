@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Union
@@ -17,7 +18,7 @@ from utils.const import VERSION, PATHS, TEAM_NAME
 from utils.gui.enums import PubType
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.filePicker import FilePicker
-from utils.gui.helpers import wait_on_heavy_process, setOverrideCursorToWait, restoreOverrideCursor
+from utils.gui.helpers import wait_on_heavy_process, setOverrideCursorToWait, restoreOverrideCursor, heavy_process
 from utils.gui.models.torrentFilterTableModel import TorrentFilterTableModel
 from utils.gui.models.torrentTableModel import TorrentTableModel
 from utils.gui.sources import ICONS, init_icons
@@ -150,6 +151,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     @wait_on_heavy_process
     def updateRoot(self, root: Path):
+        print('set new root:', root)
         self.sourceModel.updateRoot(root)
         self.root = root
         conf.root = str(root)
@@ -181,7 +183,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
             resp = self.client.upload_torrent(path, self.myteam.id)
             assert resp, 'resp 为空!'
         except (UploadTorrentException, Exception) as e:
-            on_exception(self, '文件上传失败 ' + str(type(e)) + '\n', str(e))
+            on_exception(self, '文件上传失败 ' + type(e).__name__ + '\n', str(e))
             return
 
         while path.suffix:
@@ -191,10 +193,12 @@ class WndMain(QMainWindow, Ui_MainWindow):
         wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
         wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
         wndPubPreview.published.connect(lambda: self.onPublishSucceed(row, filterModel, newPubtype))
+        # TODO try not append to list
         self.wndPubPreviews.append(wndPubPreview)
         wndPubPreview.show()
 
     def onPubDirectAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
+        # TODO 待测试
         # update pubtype if publish success
         idxes = [idx for idx in view.selectedIndexes() if idx.column() == TDB.COL_NAME]
         if not idxes:
@@ -213,7 +217,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
                 resp = self.client.upload_torrent(path, self.myteam.id)
                 assert resp, 'resp 为空!'
             except (UploadTorrentException, Exception) as e:
-                on_exception(self, nameIdx.data() + ' 文件上传失败 ' + str(type(e)) + '\n', str(e))
+                on_exception(self, nameIdx.data() + ' 文件上传失败 ' + type(e).__name__ + '\n', str(e))
                 continue
 
             while path.suffix:
@@ -226,9 +230,9 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
                 self.client.publish(**pubInfo.to_publish_info())
             except Exception as e:
-                # TODO 如果出错跳转到编辑窗口，如果已经打开了编辑窗口，则暂时阻塞循环
+                # TODO 如果出错跳转到编辑窗口，如果已经打开了编辑窗口，则需要暂时阻塞循环
                 restoreOverrideCursor()
-                res = QMessageBox.warning(None, '自动发布失败', nameIdx.data() + ' 发布失败\n' + str(type(e)) + '\n' + str(e) + '\n是否打开手动编辑窗口？', QMessageBox.Yes | QMessageBox.No)
+                res = QMessageBox.warning(None, '自动发布失败', nameIdx.data() + ' 发布失败\n' + type(e).__name__ + '\n' + str(e) + '\n是否打开手动编辑窗口？', QMessageBox.Yes | QMessageBox.No)
                 if res == QMessageBox.Yes:
                     wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
                     wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
@@ -239,22 +243,42 @@ class WndMain(QMainWindow, Ui_MainWindow):
             else:
                 self.onPublishSucceed(row, filterModel, newPubtype)
 
+    def onMakeBTAction(self, view: QTableView, silent: bool):
+        idxes = [idx for idx in view.selectedIndexes() if idx.column() == TDB.COL_NAME]
+        if not idxes:
+            return
+        if not Path(conf.exe.bc).exists():
+            raise FileNotFoundError(conf.exe.bc + ' 不存在！\n请重新配置路径！')
+
+        for idx in idxes:
+            nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
+            relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
+            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            cmd = [conf.exe.bc, '-m', str(path)]
+            if silent:
+                cmd.append('-s')
+            print(cmd)
+            with heavy_process():
+                subprocess.run(cmd)
+
     def onMoveToAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         self.updatePubtypeBySelection(view, filterModel, newPubtype)
 
     def onOpenAction(self, view: QTableView):
         for idx in view.selectedIndexes():
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
-            relpath = nameIdx.siblingAtColumn(TDB.COL_RELPATH).data()
-            self.openInExplorer(self.root.joinpath(relpath))
+            relpathIdx = nameIdx.siblingAtColumn(TDB.COL_RELPATH)
+            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            self.openInExplorer(path)
             # only open the first file in selection
             break
 
-    """Context Menu"""
     def connectContextmenuActions(self, ctxMenu: ViewContextMenu, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         # TODO connect ctx menu action signals
         ctxMenu.actPubMore.triggered.connect(lambda: self.onPubMoreAction(view, filterModel, PubType.Done))
         ctxMenu.actPubDirect.triggered.connect(lambda: self.onPubDirectAction(view, filterModel, PubType.Done))
+        ctxMenu.actMakeBTDetail.triggered.connect(lambda: self.onMakeBTAction(view, silent=False))
+        ctxMenu.actMakeBTSilent.triggered.connect(lambda: self.onMakeBTAction(view, silent=True))
         ctxMenu.actMoveTo.triggered.connect(lambda: self.onMoveToAction(view, filterModel, newPubtype))
         ctxMenu.actOpen.triggered.connect(lambda: self.onOpenAction(view))
 
@@ -285,8 +309,10 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     def on_view_doubleClicked(self, index: QModelIndex):
         # open in explorer
-        relpath = index.siblingAtColumn(TDB.COL_RELPATH).data()
-        self.openInExplorer(self.root.joinpath(relpath))
+        nameIdx = index.siblingAtColumn(TDB.COL_NAME)
+        relpathIdx = index.siblingAtColumn(TDB.COL_RELPATH)
+        path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+        self.openInExplorer(path)
 
     @pyqtSlot(QModelIndex)
     def on_viewTodo_doubleClicked(self, index: QModelIndex):
@@ -327,10 +353,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     @staticmethod
     def openInExplorer(path: Path):
-        if path.is_file():
-            path = path.parent
-        if path.is_dir():
-            os.system('explorer ' + str(path))
+        if path.is_dir() or path.is_file():
+            os.system('explorer /select,' + str(path))
 
 
 if __name__ == '__main__':

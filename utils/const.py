@@ -25,6 +25,7 @@ PATHS = Dict(
     SRC=Dict(
         PUBMORE=PROJECT_ROOT / 'src' / 'act_edit',
         PUBDIRECT=PROJECT_ROOT / 'src' / 'act_publish',
+        MAKEBT=PROJECT_ROOT / 'src' / 'act_makebt',
         MOVETO=PROJECT_ROOT / 'src' / 'act_moveto',
         OPEN=PROJECT_ROOT / 'src' / 'act_folder',
     )  # 资源文件

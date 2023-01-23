@@ -1,4 +1,5 @@
 import re
+from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
 
@@ -12,6 +13,13 @@ def setOverrideCursorToWait():
 
 def restoreOverrideCursor():
     QApplication.restoreOverrideCursor()
+
+
+@contextmanager
+def heavy_process():
+    setOverrideCursorToWait()
+    yield
+    restoreOverrideCursor()
 
 
 def wait_on_heavy_process(func):
