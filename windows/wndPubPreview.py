@@ -28,8 +28,8 @@ class WndPubPreview(QWidget, Ui_PubEdit):
         policy.setHorizontalPolicy(QSizePolicy.Expanding)
         policy.setVerticalPolicy(QSizePolicy.Expanding)
         self.webView.setSizePolicy(policy)
+        self.webView.setHtml('')
         self.frameIntro.addWidget(self.webView)
-
 
         # window settings
         self.setWindowFlags(Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
@@ -124,5 +124,5 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     init_icons()
     wnd = WndPubPreview(None, None, None)
-    wnd.exec()
+    wnd.show()
     sys.exit(app.exec_())
