@@ -22,9 +22,11 @@ from utils.gui.models.torrentFilterTableModel import TorrentFilterTableModel
 from utils.gui.models.torrentTableModel import TorrentTableModel
 from utils.gui.sources import ICONS, init_icons
 from utils.gui.torrentDatabase import TorrentDatabase as TDB
+from utils.helpers import make_proxies
 from windows.viewCtxMenu import ViewContextMenu
 from windows.wndLogin import WndLogin
 from windows.wndPubPreview import WndPubPreview
+from windows.wndSettings import WndSettings
 
 
 class WndMain(QMainWindow, Ui_MainWindow):
@@ -44,8 +46,9 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         # sub windows
         self.wndPubPreviews = []  # type: list[WndPubPreview]
+        self.wndSettings = WndSettings()
         # 其他初始化设置
-        DEBUG = True
+        DEBUG = False
         # self.btnLogin.setEnabled(False)
         self.btnTest.setVisible(DEBUG)
 
@@ -110,7 +113,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
         pass_ = conf.pass_
 
         try:
-            client = Bangumi.login_with_password(username, pass_)  # type: Bangumi
+            proxies = make_proxies(conf.proxies.addr, conf.proxies.port, conf.proxies.enabled)
+            client = Bangumi.login_with_password(username, pass_, proxies)  # type: Bangumi
             myteam = assert_team(client, TEAM_NAME)
 
         except (LoginFailed, AccountTeamError, Exception) as e:
@@ -152,6 +156,12 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.labRootDisp.setText(str(root))
 
     """Action slots"""
+    @pyqtSlot()
+    def on_actSettings_triggered(self):
+        self.wndSettings.show()
+
+
+    """Context Menu"""
     @wait_on_heavy_process
     def onPubMoreAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
         # update pubtype if publish success

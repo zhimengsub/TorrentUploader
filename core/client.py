@@ -41,8 +41,26 @@ class Bangumi(Uploader, Net):
     group: str
     cookies: Cookies
 
+    @staticmethod
+    def test_connection(proxies: dict, url: URL) -> bool:
+        client = Client(
+            base_url=url,
+            headers={
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0",
+                "cache-control": "no-cache",
+                "DNT": "1",
+                "host": url.host,
+                "origin": "https://bangumi.moe",
+                "referer": "https://bangumi.moe/",
+            },
+            proxies=proxies
+        )
+        response = client.get('/')
+        response.raise_for_status()
+        return True
+
     @classmethod
-    def login_with_password(cls, username: str, password: str) -> Self:
+    def login_with_password(cls, username: str, password: str, proxies: dict = None) -> Self:
         """使用用户名和密码来登录"""
         client = Client(
             base_url=BANGUMI_MOE_HOST,
@@ -54,6 +72,7 @@ class Bangumi(Uploader, Net):
                 "origin": "https://bangumi.moe",
                 "referer": "https://bangumi.moe/",
             },
+            proxies=proxies
         )
         response = client.post(
             "/api/user/signin",
@@ -70,7 +89,7 @@ class Bangumi(Uploader, Net):
         return result
 
     @classmethod
-    def login_with_cookies(cls, path: StrOrPath) -> Self:
+    def login_with_cookies(cls, path: StrOrPath, proxies: dict=None) -> Self:
         """使用保存的cookies来登录"""
         with open(
             PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8"
@@ -89,6 +108,7 @@ class Bangumi(Uploader, Net):
                 "origin": "https://bangumi.moe",
                 "referer": "https://bangumi.moe/",
             },
+            proxies=proxies
         )
         response = client.get("/api/user/session", cookies=cookies)
         response.raise_for_status()

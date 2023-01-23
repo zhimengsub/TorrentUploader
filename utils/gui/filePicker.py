@@ -18,3 +18,14 @@ class FilePicker(QFileDialog):
             return Path(filenames[0])
         # 未选中文件
         return None
+
+    def pickBitCometExe(self, dir=Path.cwd()) -> Optional[Path]:
+        self.setFileMode(QFileDialog.ExistingFile)
+        self.setDirectory(str(dir))
+        self.setNameFilter('BitComet.exe')
+        if self.exec_():
+            # return list of full path
+            filenames = self.selectedFiles()
+            return Path(filenames[0])
+            # 未选中文件
+        return None

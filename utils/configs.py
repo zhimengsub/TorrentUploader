@@ -14,6 +14,15 @@ def loadConfigs(path: Path) -> Dict:
         pass_='',
         wndWidth=-1,
         wndHeight=-1,
+        exe=Dict(
+            bc='',
+        ),
+        autoMakeTorrent=True,
+        proxies=Dict(
+            enabled=False,
+            addr='127.0.0.1',
+            port='10809'
+        )
     )
     if path.is_file():
         with path.open('r', encoding='utf8') as f:

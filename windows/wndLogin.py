@@ -11,6 +11,7 @@ from utils.const import PATHS, TEAM_NAME
 from utils.gui.exception_hook import UncaughtHook, on_exception
 from utils.gui.helpers import wait_on_heavy_process
 from utils.gui.sources import ICONS
+from utils.helpers import make_proxies
 
 
 class WndLogin(QDialog, Ui_dlgLogin):
@@ -68,7 +69,8 @@ class WndLogin(QDialog, Ui_dlgLogin):
             return
 
         try:
-            client = Bangumi.login_with_password(username, pass_)  # type: Bangumi
+            proxies = make_proxies(conf.proxies.addr, conf.proxies.port, conf.proxies.enabled)
+            client = Bangumi.login_with_password(username, pass_, proxies)  # type: Bangumi
             myteam = assert_team(client, TEAM_NAME)
 
         except (LoginFailed, AccountTeamError, Exception) as e:
