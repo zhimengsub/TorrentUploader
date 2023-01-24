@@ -5,17 +5,17 @@ from PyQt5.QtCore import QFileSystemWatcher, QObject, pyqtSignal, pyqtBoundSigna
 
 from errors import DirectoryWatchFailed, SqlError
 from utils.gui.enums import PubType
-from utils.gui.torrentDatabase import TorrentDatabase
+from utils.gui.fileDatabase import FileDatabase
 
 
-class TorrentManager(QObject):
+class FileManager(QObject):
     """Watch for torrent file changes, and sync result to database"""
     torrentChanged = pyqtSignal()  # type: pyqtBoundSignal
     def __init__(self, parent: QObject=None):
         super().__init__(parent)
         self.watcher = QFileSystemWatcher(parent)
         self.root = None  # type: Path
-        self.db = TorrentDatabase()  # TODO call close()?
+        self.db = FileDatabase()  # TODO call close()?
         if not self.db.open():
             raise SqlError('db open failed!')
 

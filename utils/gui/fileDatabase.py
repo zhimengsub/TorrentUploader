@@ -9,7 +9,7 @@ from utils.gui.enums import PubType
 from utils.gui.helpers import get_mtime
 
 
-class TorrentDatabase(QSqlDatabase):
+class FileDatabase(QSqlDatabase):
     """Manipulate torrent file database"""
     # (文件名，文件父目录相对于root的路径，发布状态)
     # (name TEXT PK, relpath TEXT PK, pubtype INT NN, mtime DATETIME)
@@ -116,7 +116,7 @@ class TorrentDatabase(QSqlDatabase):
 
 
 if __name__ == "__main__":
-    db = TorrentDatabase()
+    db = FileDatabase()
     from pathlib import Path
     root = Path(r'D:')
     tr = Path(r'D:\test\[织梦字幕组].torrent')

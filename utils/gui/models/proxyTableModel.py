@@ -3,10 +3,10 @@ import datetime
 from PyQt5.QtCore import QObject, QSortFilterProxyModel, QModelIndex, Qt, QDateTime
 
 from utils.gui.enums import PubType
-from utils.gui.torrentDatabase import TorrentDatabase as TDB
+from utils.gui.fileDatabase import FileDatabase as TDB
 
 
-class TorrentFilterTableModel(QSortFilterProxyModel):
+class ProxyTableModel(QSortFilterProxyModel):
     """Filter rows according to its PubType field"""
     def __init__(self, pubtype: PubType, parent: QObject):
         super().__init__(parent)

@@ -6,17 +6,17 @@ from PyQt5.QtSql import QSqlTableModel, QSqlError
 
 from errors import SqlError
 from utils.gui.enums import PubType
-from utils.gui.torrentDatabase import TorrentDatabase as TDB
-from utils.gui.torrentManager import TorrentManager
+from utils.gui.fileDatabase import FileDatabase as TDB
+from utils.gui.fileManager import FileManager
 
 
-class TorrentTableModel(QSqlTableModel):
+class TableModel(QSqlTableModel):
     """Connect to torrent database"""
     updatedRoot = pyqtSignal()  # type: pyqtBoundSignal
     torrentChanged = pyqtSignal()  # type: pyqtBoundSignal
 
     def __init__(self, parent: QObject):
-        self.manager = TorrentManager(parent)
+        self.manager = FileManager(parent)
         super().__init__(parent, self.manager.db)
         # update model data on torrentChanged
         self.manager.torrentChanged.connect(self.select)
