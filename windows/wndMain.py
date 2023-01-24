@@ -1,5 +1,4 @@
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Union
@@ -17,12 +16,12 @@ from utils.configs import saveConfigs, conf
 from utils.const import VERSION, PATHS, TEAM_NAME
 from utils.gui.enums import PubType
 from utils.gui.exception_hook import UncaughtHook, on_exception
+from utils.gui.fileDatabase import FileDatabase as TDB
 from utils.gui.filePicker import FilePicker
-from utils.gui.helpers import wait_on_heavy_process, setOverrideCursorToWait, restoreOverrideCursor, heavy_process
-from utils.gui.models.torrentFilterTableModel import TorrentFilterTableModel
-from utils.gui.models.torrentTableModel import TorrentTableModel
+from utils.gui.helpers import wait_on_heavy_process, setOverrideCursorToWait, restoreOverrideCursor, TorrentMakerThread
+from utils.gui.models.proxyTableModel import ProxyTableModel
+from utils.gui.models.tableModel import TableModel
 from utils.gui.sources import ICONS, init_icons
-from utils.gui.torrentDatabase import TorrentDatabase as TDB
 from utils.helpers import make_proxies
 from windows.viewCtxMenu import ViewContextMenu
 from windows.wndLogin import WndLogin
@@ -57,32 +56,36 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.myteam = None  # type: Optional[MyTeam]
         self.loggedIn = False
 
-        self.picker = FilePicker(self)  # TODO 监视mp4、mkv->未做种，用qb自动生成种子放入未发布
+        self.picker = FilePicker(self)
         self.viewTodo.contextMenuEvent = lambda a0: self.onContextmenuEvent(PubType.Todo, PubType.Done, a0)
         self.viewDone.contextMenuEvent = lambda a0: self.onContextmenuEvent(PubType.Done, PubType.Todo, a0)
 
         # Must be absolute path
         self.root = None  # type: Optional[Path]
         # sourceModel读取数据库，不直接显示
-        self.sourceModel = TorrentTableModel(self)
-        self.sourceModel.updatedRoot.connect(lambda: [self.updateView(self.viewTodo, self.filterModels[PubType.Todo]),
-                                                      self.updateView(self.viewDone, self.filterModels[PubType.Done])])
-        self.sourceModel.torrentChanged.connect(lambda: [self.updateView(self.viewTodo, self.filterModels[PubType.Todo]),
-                                                         self.updateView(self.viewDone, self.filterModels[PubType.Done])])
+        self.sourceModel = TableModel(self)
+        self.sourceModel.updatedRoot.connect(
+            lambda: [self.updateView(self.viewTodo, self.proxyModels[PubType.Todo]),
+                     self.updateView(self.viewDone, self.proxyModels[PubType.Done])])
+        self.sourceModel.manager.tableChanged.connect(
+            lambda: [self.updateView(self.viewTodo, self.proxyModels[PubType.Todo]),
+                     self.updateView(self.viewDone, self.proxyModels[PubType.Done])])
+        self.sourceModel.manager.namesAdded.connect(self.onNamesAdded)
+        self.sourceModel.manager.torrentsAdded.connect(self.onTorrentsAdded)
 
         # 把sourceModel按pubtype过滤后分别显示在各自TableView里
-        self.filterModels = {
-            pubtype: TorrentFilterTableModel(pubtype, self) for pubtype in [PubType.Todo, PubType.Done]
-        }  # type: dict[PubType, TorrentFilterTableModel]
-        for filterModel in self.filterModels.values():
-            filterModel.setSourceModel(self.sourceModel)
+        self.proxyModels = {
+            pubtype: ProxyTableModel(pubtype, self) for pubtype in [PubType.Todo, PubType.Done]
+        }  # type: dict[PubType, ProxyTableModel]
+        for proxyModel in self.proxyModels.values():
+            proxyModel.setSourceModel(self.sourceModel)
 
         # print('proxy model')
-        self.viewTodo.setModel(self.filterModels[PubType.Todo])
+        self.viewTodo.setModel(self.proxyModels[PubType.Todo])
         self.viewTodo.setSortingEnabled(True)
         self.viewTodo.sortByColumn(TDB.COL_MTIME, Qt.DescendingOrder)
 
-        self.viewDone.setModel(self.filterModels[PubType.Done])
+        self.viewDone.setModel(self.proxyModels[PubType.Done])
         self.viewDone.setSortingEnabled(True)
         self.viewDone.sortByColumn(TDB.COL_RELPATH, Qt.DescendingOrder)
         # for debug:
@@ -99,11 +102,11 @@ class WndMain(QMainWindow, Ui_MainWindow):
             self.autoLogin()
 
     """Utils"""
-    def onPublishSucceed(self, row: Union[list[int], int], filterModel: TorrentFilterTableModel, newPubtype: PubType):
+    def onPublishSucceed(self, row: Union[list[int], int], proxyModel: ProxyTableModel, newPubtype: PubType):
         if isinstance(row, list):
-            self.updatePubtypeByRows(row, filterModel, newPubtype)
+            self.updatePubtypeByRows(row, proxyModel, newPubtype)
         else:
-            self.updatePubtypeByRow(row, filterModel, newPubtype)
+            self.updatePubtypeByRow(row, proxyModel, newPubtype)
 
     @wait_on_heavy_process
     def autoLogin(self):
@@ -130,23 +133,42 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.labAccntDisp.setText(username)
         self.loggedIn = True
 
+    def onNamesAdded(self, dir: Path, added_names: set[str]):
+        """auto make torrents on new names added"""
+        # 不需要select，内容会直接更新
+        paths = set(dir.joinpath(name) for name in added_names)
+        print('on added', paths)
+        self.sourceModel.addPendings(paths)
+        td = TorrentMakerThread(self, paths, silent=True)
+        td.start()
+        # 无论种子是否添加都要removePending，防止卡住
+        td.finished.connect(lambda: self.sourceModel.removePendings(paths))
+
+    def onTorrentsAdded(self, dir: Path, added_torrents: set[str]):
+        print('add torrents:', '\n'.join(added_torrents))
+        vidpaths = set()
+        for added in added_torrents:
+            name = added.removesuffix('.torrent')
+            vidpaths.add(dir.joinpath(name))
+        self.sourceModel.removePendings(vidpaths)
+
     @wait_on_heavy_process
-    def updatePubtypeByRow(self, row: int, filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        idx = filterModel.index(row, TDB.COL_NAME)
-        self.sourceModel.updatePubtype(filterModel.mapToSource(idx), newPubtype)
+    def updatePubtypeByRow(self, row: int, proxyModel: ProxyTableModel, newPubtype: PubType):
+        idx = proxyModel.index(row, TDB.COL_NAME)
+        self.sourceModel.updatePubtype(proxyModel.mapToSource(idx), newPubtype)
         self.updateAllViews()
 
     @wait_on_heavy_process
-    def updatePubtypeByRows(self, rows: list[int], filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        idxes = [filterModel.index(row, TDB.COL_NAME) for row in rows]
-        src_idxes = [filterModel.mapToSource(idx) for idx in idxes]
+    def updatePubtypeByRows(self, rows: list[int], proxyModel: ProxyTableModel, newPubtype: PubType):
+        idxes = [proxyModel.index(row, TDB.COL_NAME) for row in rows]
+        src_idxes = [proxyModel.mapToSource(idx) for idx in idxes]
         self.sourceModel.updatePubtypes(src_idxes, newPubtype)
         self.updateAllViews()
 
     @wait_on_heavy_process
-    def updatePubtypeBySelection(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
+    def updatePubtypeBySelection(self, view: QTableView, proxyModel: ProxyTableModel, newPubtype: PubType):
         idxes = [idx for idx in view.selectedIndexes() if idx.column() == TDB.COL_NAME]
-        self.sourceModel.updatePubtypes([filterModel.mapToSource(idx) for idx in idxes], newPubtype)
+        self.sourceModel.updatePubtypes([proxyModel.mapToSource(idx) for idx in idxes], newPubtype)
         self.updateAllViews()
 
     @wait_on_heavy_process
@@ -165,7 +187,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     """Context Menu"""
     @wait_on_heavy_process
-    def onPubMoreAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
+    def onPubMoreAction(self, view: QTableView, proxyModel: ProxyTableModel, newPubtype: PubType):
         # update pubtype if publish success
         idxes = view.selectedIndexes()
         if not idxes:
@@ -178,27 +200,26 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
         relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
-        path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+        vidpath = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+        torrentpath = Path(str(vidpath) + '.torrent')
         try:
-            resp = self.client.upload_torrent(path, self.myteam.id)
+            resp = self.client.upload_torrent(torrentpath, self.myteam.id)
             assert resp, 'resp 为空!'
         except (UploadTorrentException, Exception) as e:
             on_exception(self, '文件上传失败 ' + type(e).__name__ + '\n', str(e))
             return
 
-        while path.suffix:
-            path = path.with_suffix('')
-        title = path.stem
+        while torrentpath.suffix:
+            torrentpath = torrentpath.with_suffix('')
+        title = torrentpath.stem
 
         wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
         wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
-        wndPubPreview.published.connect(lambda: self.onPublishSucceed(row, filterModel, newPubtype))
-        # TODO try not append to list
+        wndPubPreview.published.connect(lambda: self.onPublishSucceed(row, proxyModel, newPubtype))
         self.wndPubPreviews.append(wndPubPreview)
         wndPubPreview.show()
 
-    def onPubDirectAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        # TODO 待测试
+    def onPubDirectAction(self, view: QTableView, proxyModel: ProxyTableModel, newPubtype: PubType):
         # update pubtype if publish success
         idxes = [idx for idx in view.selectedIndexes() if idx.column() == TDB.COL_NAME]
         if not idxes:
@@ -212,17 +233,18 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
             relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
-            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            vidpath = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            torrentpath = Path(str(vidpath) + '.torrent')
             try:
-                resp = self.client.upload_torrent(path, self.myteam.id)
+                resp = self.client.upload_torrent(torrentpath, self.myteam.id)
                 assert resp, 'resp 为空!'
             except (UploadTorrentException, Exception) as e:
                 on_exception(self, nameIdx.data() + ' 文件上传失败 ' + type(e).__name__ + '\n', str(e))
                 continue
 
-            while path.suffix:
-                path = path.with_suffix('')
-            title = path.stem
+            while torrentpath.suffix:
+                torrentpath = torrentpath.with_suffix('')
+            title = torrentpath.stem
 
             try:
                 pubInfo = PublishInfo(self.myteam, resp, title)
@@ -230,18 +252,21 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
                 self.client.publish(**pubInfo.to_publish_info())
             except Exception as e:
-                # TODO 如果出错跳转到编辑窗口，如果已经打开了编辑窗口，则需要暂时阻塞循环
                 restoreOverrideCursor()
-                res = QMessageBox.warning(None, '自动发布失败', nameIdx.data() + ' 发布失败\n' + type(e).__name__ + '\n' + str(e) + '\n是否打开手动编辑窗口？', QMessageBox.Yes | QMessageBox.No)
+                # 如果出错跳转到编辑窗口
+                # res = QMessageBox.warning(None, '自动发布失败', nameIdx.data() + ' 发布失败\n' + type(e).__name__ + '\n' + str(e) + '\n是否打开手动编辑窗口？', QMessageBox.Yes | QMessageBox.No)
+                res = QMessageBox.warning(None, '自动发布失败', nameIdx.data() + ' 发布失败\n' + type(e).__name__ + '\n' + str(e), QMessageBox.Ok)
                 if res == QMessageBox.Yes:
                     wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
                     wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
-                    wndPubPreview.published.connect(lambda: self.onPublishSucceed(row, filterModel, newPubtype))
+                    wndPubPreview.published.connect(lambda: self.onPublishSucceed(row, proxyModel, newPubtype))
                     self.wndPubPreviews.append(wndPubPreview)
+                    # FIXME 如果已经打开过编辑窗口，则需要暂时阻塞循环
                     wndPubPreview.show()
                 continue
             else:
-                self.onPublishSucceed(row, filterModel, newPubtype)
+                self.onPublishSucceed(row, proxyModel, newPubtype)
+                restoreOverrideCursor()
 
     def onMakeBTAction(self, view: QTableView, silent: bool):
         idxes = [idx for idx in view.selectedIndexes() if idx.column() == TDB.COL_NAME]
@@ -250,22 +275,29 @@ class WndMain(QMainWindow, Ui_MainWindow):
         if not Path(conf.exe.bc).exists():
             raise FileNotFoundError(conf.exe.bc + ' 不存在！\n请重新配置路径！')
 
+        paths = set()
         for idx in idxes:
-            nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
             relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
+            nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
+            # 从idx得到的结果是符号
+            btExisted = self.sourceModel.manager.db.selectBtByPath(self.root, relpathIdx.data(), nameIdx.data())
+            if btExisted:
+                continue
             path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
-            cmd = [conf.exe.bc, '-m', str(path)]
-            if silent:
-                cmd.append('-s')
-            print(cmd)
-            with heavy_process():
-                subprocess.run(cmd)
+            paths.add(path)
 
-    def onMoveToAction(self, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        self.updatePubtypeBySelection(view, filterModel, newPubtype)
+        self.sourceModel.addPendings(paths)
+        td = TorrentMakerThread(self, paths, silent)
+        td.start()
+        # 无论种子是否添加都要removePending，防止卡住
+        td.finished.connect(lambda: self.sourceModel.removePendings(paths))
+
+    def onMoveToAction(self, view: QTableView, proxyModel: ProxyTableModel, newPubtype: PubType):
+        self.updatePubtypeBySelection(view, proxyModel, newPubtype)
 
     def onOpenAction(self, view: QTableView):
         for idx in view.selectedIndexes():
+            # note multiple indexes when selecting the whole line
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
             relpathIdx = nameIdx.siblingAtColumn(TDB.COL_RELPATH)
             path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
@@ -273,21 +305,20 @@ class WndMain(QMainWindow, Ui_MainWindow):
             # only open the first file in selection
             break
 
-    def connectContextmenuActions(self, ctxMenu: ViewContextMenu, view: QTableView, filterModel: TorrentFilterTableModel, newPubtype: PubType):
-        # TODO connect ctx menu action signals
-        ctxMenu.actPubMore.triggered.connect(lambda: self.onPubMoreAction(view, filterModel, PubType.Done))
-        ctxMenu.actPubDirect.triggered.connect(lambda: self.onPubDirectAction(view, filterModel, PubType.Done))
+    def connectContextmenuActions(self, ctxMenu: ViewContextMenu, view: QTableView, proxyModel: ProxyTableModel, newPubtype: PubType):
+        ctxMenu.actPubMore.triggered.connect(lambda: self.onPubMoreAction(view, proxyModel, PubType.Done))
+        ctxMenu.actPubDirect.triggered.connect(lambda: self.onPubDirectAction(view, proxyModel, PubType.Done))
         ctxMenu.actMakeBTDetail.triggered.connect(lambda: self.onMakeBTAction(view, silent=False))
         ctxMenu.actMakeBTSilent.triggered.connect(lambda: self.onMakeBTAction(view, silent=True))
-        ctxMenu.actMoveTo.triggered.connect(lambda: self.onMoveToAction(view, filterModel, newPubtype))
+        ctxMenu.actMoveTo.triggered.connect(lambda: self.onMoveToAction(view, proxyModel, newPubtype))
         ctxMenu.actOpen.triggered.connect(lambda: self.onOpenAction(view))
 
     def onContextmenuEvent(self, pubtype: PubType, newPubtype: PubType, a0: QtGui.QContextMenuEvent):
         page = self.tab.currentWidget()
         view = page.findChild(QTableView)  # type: QTableView
-        filterModel = self.filterModels[pubtype]
+        proxyModel = self.proxyModels[pubtype]
         ctxMenu = ViewContextMenu(pubtype, view)
-        self.connectContextmenuActions(ctxMenu, view, filterModel, newPubtype)
+        self.connectContextmenuActions(ctxMenu, view, proxyModel, newPubtype)
         ctxMenu.exec(a0.globalPos())
 
     """Slots"""
@@ -299,7 +330,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot()
     def on_btnTest_clicked(self):
-        self.onPublishSucceed(0, self.filterModels[PubType.Done], PubType.Todo)
+        self.onPublishSucceed(0, self.proxyModels[PubType.Done], PubType.Todo)
 
     @pyqtSlot()
     def on_btnBrowse_clicked(self):
@@ -332,14 +363,15 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
     """Misc"""
     def updateAllViews(self):
-        self.updateView(self.viewTodo, self.filterModels[PubType.Todo])
-        self.updateView(self.viewDone, self.filterModels[PubType.Done])
+        self.updateView(self.viewTodo, self.proxyModels[PubType.Todo])
+        self.updateView(self.viewDone, self.proxyModels[PubType.Done])
 
     @staticmethod
-    def updateView(view: QTableView, model: TorrentFilterTableModel):
+    def updateView(view: QTableView, model: ProxyTableModel):
         """更新View显示内容"""
         view.hideColumn(TDB.COL_PUBTYPE)  # 必须每次更新数据时都调用
         model.update_headers()  # 必须每次更新数据时都调用
+        view.resizeColumnToContents(TDB.COL_BT)
         view.resizeColumnToContents(TDB.COL_NAME)
         view.resizeColumnToContents(TDB.COL_MTIME)
         # view.resizeColumnsToContents()

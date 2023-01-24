@@ -14,7 +14,8 @@ class ProxyTableModel(QSortFilterProxyModel):
 
     def update_headers(self):
         # set col name
-        self.setHeaderData(TDB.COL_NAME, Qt.Horizontal, '种子')
+        self.setHeaderData(TDB.COL_BT, Qt.Horizontal, '种子')
+        self.setHeaderData(TDB.COL_NAME, Qt.Horizontal, '视频')
         self.setHeaderData(TDB.COL_RELPATH, Qt.Horizontal, '路径')
         self.setHeaderData(TDB.COL_MTIME, Qt.Horizontal, '修改日期')
 

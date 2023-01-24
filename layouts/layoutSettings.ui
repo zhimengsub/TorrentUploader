@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>602</width>
-    <height>334</height>
+    <height>409</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -177,6 +177,22 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>说明</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>请确保种子文件名包含视频的后缀名，如&quot;视频名.mp4.torrent&quot;，否则工具无法正确识别到种子！</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -192,7 +208,7 @@
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="standardButtons">
-      <set>QDialogButtonBox::Apply|QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
     </widget>
    </item>

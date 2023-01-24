@@ -30,9 +30,29 @@ PATHS = Dict(
         OPEN=PROJECT_ROOT / 'src' / 'act_folder',
     )  # 资源文件
 )
+PATHS.LOG.mkdir(exist_ok=True)
 """路径管理"""
 
-PATHS.LOG.mkdir(exist_ok=True)
+SUFF = Dict(
+    VID={'.mp4', '.mkv', '.ts', '.flv', '.avi'}
+)
+
+SYMB = Dict(
+    YES='✅',
+    NO='❌',
+    PEND='⌛'
+)
+
+INTERVAL = Dict(
+    POLL_COPY=5,
+    POLL_MAKEBT=5,
+
+)
+
+RETRY = Dict(
+    POLL_MAKEBT=6
+)
+
 
 PAPER_URL_LIST = [
     "https://img30.360buyimg.com/imgzone/jfs/t1/141321/32/30637/399120/635daaaeE1c14939e/d56dc1fb1c06bed4.png",

@@ -2,8 +2,7 @@ import sys
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, pyqtSlot
-from PyQt5.QtGui import QIcon, QCursor
-from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow, QMessageBox, QLineEdit, QFrame, QAbstractButton, \
+from PyQt5.QtWidgets import QMessageBox, QFrame, QAbstractButton, \
     QDialogButtonBox
 
 from core.client import Bangumi
@@ -12,6 +11,7 @@ from utils.configs import conf
 from utils.const import BANGUMI_MOE_HOST
 from utils.gui.exception_hook import UncaughtHook, on_exception  # 见'exception hook'
 from utils.gui.filePicker import FilePicker
+from utils.gui.helpers import heavy_process, restoreOverrideCursor
 from utils.gui.sources import ICONS
 from utils.helpers import make_proxies
 
@@ -70,8 +70,10 @@ class WndSettings(QFrame, Ui_Settings):
     def on_btnProxyTest_clicked(self):
         proxies = make_proxies(self.txtProxyAddr.text(), self.txtProxyPort.text(), self.radProxyOn.isChecked())
         try:
-            Bangumi.test_connection(proxies, BANGUMI_MOE_HOST)
+            with heavy_process():
+                Bangumi.test_connection(proxies, BANGUMI_MOE_HOST)
         except Exception as e:
+            restoreOverrideCursor()
             QMessageBox.critical(self, '连接失败', '\n'.join(
                 ['无法连接到'+str(BANGUMI_MOE_HOST), type(e).__name__, str(e)]))
         else:

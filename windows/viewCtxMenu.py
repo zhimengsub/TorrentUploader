@@ -26,7 +26,7 @@ class ViewContextMenu(QMenu):
 
         self.actMoveTo = QAction(ICONS.MOVETO, '移动到' + ('已发布' if pubtype == PubType.Todo else '待发布'), parent)
         self.actMoveTo.setObjectName('actMoveTo')
-        self.actMakeBTSilent.setStatusTip('支持多选')
+        self.actMoveTo.setStatusTip('支持多选')
 
         self.actOpen = QAction(ICONS.OPEN, '打开所在文件夹', parent)
         self.actOpen.setObjectName('actOpen')

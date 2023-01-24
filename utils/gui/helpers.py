@@ -1,10 +1,16 @@
 import re
+import subprocess
+import time
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
+from typing import Iterable
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import Qt, QThread, QObject
+from PyQt5.QtWidgets import QApplication, QMessageBox
+
+from utils.configs import conf
+from utils.const import INTERVAL, RETRY
 
 
 def setOverrideCursorToWait():
@@ -32,8 +38,60 @@ def wait_on_heavy_process(func):
         return res
     return decorated
 
+
 def get_mtime(file: Path) -> float:
     return file.stat().st_mtime
+
+
+def exists_bt(vidpath: Path) -> bool:
+    btpath = Path(f'{vidpath}.torrent')
+    return btpath.exists()
+
+
+def make_torrent(vidpath: Path, silent: bool):
+    cmd = [conf.exe.bc, '-m', str(vidpath)]
+    if silent:
+        cmd.append('-s')
+    print(cmd)
+    # limited loop in case error by BitComet
+    for _ in range(RETRY.POLL_MAKEBT):
+        if exists_bt(vidpath):
+            break
+        subprocess.run(cmd)
+        if exists_bt(vidpath):
+            break
+        time.sleep(INTERVAL.POLL_MAKEBT)
+
+
+def wait_copy_complete(path: Path) -> bool:
+    while True:
+        try:
+            # if copy is not complete, then PermissionError will be raised
+            with path.open('rb+', 2):
+                break
+        except PermissionError:
+            time.sleep(INTERVAL.POLL_COPY)
+            continue
+        except FileNotFoundError:
+            print('file not found', str(path))
+            return False
+        except Exception as e:
+            QMessageBox.critical(None, '错误', '处理' + str(path) + '错误\n' + type(e).__name__ + '\n' + str(e))
+            return False
+    print('copy complete:', str(path))
+    return True
+
+
+class TorrentMakerThread(QThread):
+    def __init__(self, parent: QObject, vidpaths: Iterable[Path], silent: bool):
+        super().__init__(parent)
+        self.vidpaths = vidpaths
+        self.silent = silent
+
+    def run(self) -> None:
+        for path in self.vidpaths:
+            if wait_copy_complete(path):
+                make_torrent(path, self.silent)
 
 
 def parse_vidname(vidname) -> tuple[str, str]:
