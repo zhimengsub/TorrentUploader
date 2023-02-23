@@ -35,7 +35,7 @@ class FileManager(QObject):
 
     @staticmethod
     def videos(path: Path) -> Iterator[str]:
-        """return video names iterator"""
+        """return video names iterator under a path"""
         for p in path.iterdir():
             if p.suffix in SUFF.VID:
                 yield p.name
@@ -113,6 +113,19 @@ class FileManager(QObject):
 
     def onDirectoryChanged(self, watched_dir: Path, block_signals: bool):
         """sync to db if video/torrent changed, and add `watched_dir`'s subfolders to watch list"""
+        if not watched_dir.exists():
+            # on watched_dir removed (seems like this is not allowed by OS  as long as the program is running)
+            print('dir', str(watched_dir), 'is removed!')
+            # self.watcher.removePath(watched_dir)  # 不存在时会remove失败
+            self.db.dropTable(watched_dir)
+            if not block_signals:
+                self.tableChanged.emit()
+            return
+
+        # FIXME unable to handle on subfolder removed, need to make the following
+        #  scanning recursively.
+        #  The lazy way: call self.db.purge() then emit corresponding signals if purged any.
+
         # scan for video file changes
         added_names, removed_names = self.scanVideoChanges(watched_dir)
         if added_names or removed_names:
@@ -142,7 +155,7 @@ class FileManager(QObject):
             self.watcher.removePaths(old)
 
         self.db.createTableIfNotExist(self.root)
-
+        self.db.purge(self.root)
         self.watchDir(self.root)
         # considering there may be changes when this tool is offline,
         # manually sync all changes to database recursively

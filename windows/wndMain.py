@@ -97,7 +97,12 @@ class WndMain(QMainWindow, Ui_MainWindow):
         if conf.wndWidth != -1:
             self.resize(conf.wndWidth, conf.wndHeight)
         if conf.root:
-            self.updateRoot(Path(conf.root))
+            root = Path(conf.root)
+            if root.exists():
+                self.updateRoot(root)
+            else:
+                on_exception(self, '工作目录', str(root), '不存在！', sep=' ')
+                conf.root = ''
         if conf.autoLogin:
             self.autoLogin()
 

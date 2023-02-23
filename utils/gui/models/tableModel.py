@@ -9,6 +9,7 @@ from utils.const import SYMB
 from utils.gui.enums import PubType
 from utils.gui.fileDatabase import FileDatabase as TDB
 from utils.gui.fileManager import FileManager
+from utils.mypathlib import escape
 
 
 class TableModel(QSqlTableModel):
@@ -32,7 +33,8 @@ class TableModel(QSqlTableModel):
         # update `bt`, `mtime` fields
         self.manager.db.updateAllRedundancies(root)
         # change to table `root`
-        self.setTable(str(self.root))
+        self.setTable(escape(self.root))
+        print('last error:', self.lastError().text())
         # update model
         self.select()
         self.updatedRoot.emit()

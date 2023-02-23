@@ -7,6 +7,7 @@ from errors import SqlError
 from utils.const import PATHS
 from utils.gui.enums import PubType
 from utils.gui.helpers import get_mtime, exists_bt
+from utils.mypathlib import escape
 
 
 class FileDatabase(QSqlDatabase):
@@ -33,8 +34,18 @@ class FileDatabase(QSqlDatabase):
         if not self.transaction():
             raise SqlError('transaction() returns False!')
 
+    def purge(self, root: Path):
+        '''remove items that no longer exists in filesystem.'''
+        removed = []
+        for name, relpath in self.selectPaths(root):
+            filepath = root / relpath / name
+            if not filepath.exists():
+                removed.append((name, relpath))
+        for name, relpath in removed:
+            self.removeItem(root, name, relpath)
+
     def createTableIfNotExist(self, root: Path):
-        self.exec(f'CREATE TABLE IF NOT EXISTS "{root}" ('
+        self.exec(f'CREATE TABLE IF NOT EXISTS "{escape(root)}" ('
                         'bt BOOLEAN NOT NULL,'
                         'name TEXT NOT NULL,'
                         'relpath TEXT NOT NULL,'
@@ -44,23 +55,31 @@ class FileDatabase(QSqlDatabase):
                   ');')
         self.raiseOnError()
 
+    def dropTable(self, root: Path):
+        self.exec(f'DROP TABLE IF EXISTS "{escape(root)}";')
+        self.raiseOnError()
+
     def selectNamesByPath(self, root: Path, relpath: Path) -> Iterator[str]:
-        res = self.exec(f'SELECT name FROM "{root}" WHERE relpath = "{relpath}";')
+        res = self.exec(f'SELECT name FROM "{escape(root)}" WHERE relpath = "{relpath}";')
+        self.raiseOnError()
         while res.next():
             yield str(res.value(0))
 
     def selectBtByPath(self, root: Path, relpath: Path, name: str) -> bool:
-        res = self.exec(f'SELECT bt FROM "{root}" WHERE name = "{name}" AND relpath = "{relpath}";')
+        res = self.exec(f'SELECT bt FROM "{escape(root)}" WHERE name = "{name}" AND relpath = "{relpath}";')
+        self.raiseOnError()
         assert res.next(), str(root/relpath/name) + ' not found in db!'
         return bool(res.value(0))
 
     def selectBtsNamesByPath(self, root: Path, relpath: Path) -> Iterator[tuple[bool, str]]:
-        res = self.exec(f'SELECT bt, name FROM "{root}" WHERE relpath = "{relpath}";')
+        res = self.exec(f'SELECT bt, name FROM "{escape(root)}" WHERE relpath = "{relpath}";')
+        self.raiseOnError()
         while res.next():
             yield bool(res.value(0)), str(res.value(1))
 
     def selectPaths(self, root: Path) -> Iterator[tuple[str, Path]]:
-        res = self.exec(f'SELECT name, relpath FROM "{root}";')
+        res = self.exec(f'SELECT name, relpath FROM "{escape(root)}";')
+        self.raiseOnError()
         while res.next():
             yield str(res.value(0)), Path(str(res.value(1)))
 
@@ -70,42 +89,46 @@ class FileDatabase(QSqlDatabase):
             path = root / relpath / name
             bt = int(exists_bt(path))
             mtime = get_mtime(path)
-            self.exec(f'INSERT INTO "{root}"(bt, name, relpath, pubtype, mtime) VALUES("{bt}", "{name}", "{relpath}", {pubtype.value}, {mtime});')
+            self.exec(f'INSERT INTO "{escape(root)}"(bt, name, relpath, pubtype, mtime) VALUES("{bt}", "{name}", "{relpath}", {pubtype.value}, {mtime});')
         self.commit()
+        self.raiseOnError()
+
+    def removeItem(self, root: Path, name: str, relpath: Path):
+        self.exec(f'DELETE FROM "{escape(root)}" WHERE name = "{name}" AND relpath = "{relpath}";')
         self.raiseOnError()
 
     def removeItems(self, root: Path, names: Iterable[str], relpath: Path):
         self.batch_start()
         for name in names:
-            self.exec(f'DELETE FROM "{root}" WHERE name = "{name}" AND relpath = "{relpath}";')
+            self.exec(f'DELETE FROM "{escape(root)}" WHERE name = "{name}" AND relpath = "{relpath}";')
         self.commit()
         self.raiseOnError()
 
     def updateBT(self, root: Path, name: str, relpath: Path, newBT: bool):
-        self.exec(f'UPDATE "{root}" SET bt={int(newBT)} WHERE name="{name}" AND relpath="{relpath}";')
+        self.exec(f'UPDATE "{escape(root)}" SET bt={int(newBT)} WHERE name="{name}" AND relpath="{relpath}";')
         self.raiseOnError()
 
     def updateBTs(self, root: Path, names: Iterable[str], relpath: Union[Path, str], newBT: bool):
         if not self.transaction():
             raise SqlError('transaction() returns False!')
         for name in names:
-            self.exec(f'UPDATE "{root}" SET bt={int(newBT)} WHERE name="{name}" AND relpath="{relpath}";')
+            self.exec(f'UPDATE "{escape(root)}" SET bt={int(newBT)} WHERE name="{name}" AND relpath="{relpath}";')
         self.commit()
         self.raiseOnError()
 
     def updateMtime(self, root: Path, name: str, relpath: Path, newMtime: float):
-        self.exec(f'UPDATE "{root}" SET mtime={newMtime} WHERE name="{name}" AND relpath="{relpath}";')
+        self.exec(f'UPDATE "{escape(root)}" SET mtime={newMtime} WHERE name="{name}" AND relpath="{relpath}";')
         self.raiseOnError()
 
     def updatePubtype(self, root: Path, name: str, relpath: Path, newPubtype: PubType):
-        self.exec(f'UPDATE "{root}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
+        self.exec(f'UPDATE "{escape(root)}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
         self.raiseOnError()
 
     def updatePubtypes(self, root: Path, names: Iterable[str], relpaths: Iterable[Union[Path, str]], newPubtype: PubType):
         if not self.transaction():
             raise SqlError('transaction() returns False!')
         for name, relpath in zip(names, relpaths):
-            self.exec(f'UPDATE "{root}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
+            self.exec(f'UPDATE "{escape(root)}" SET pubtype={newPubtype.value} WHERE name="{name}" AND relpath="{relpath}";')
         self.commit()
         self.raiseOnError()
 

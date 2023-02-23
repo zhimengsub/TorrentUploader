@@ -28,6 +28,7 @@ def loadConfigs(path: Path) -> Dict:
         with path.open('r', encoding='utf8') as f:
             read = Dict(json.load(f))
         conf.update(read)
+        # 部分值的类型转换
         conf.root = str(conf.root)
         conf.autoLogin = bool(conf.autoLogin)
         conf.remember = bool(conf.remember)
@@ -41,7 +42,7 @@ def loadConfigs(path: Path) -> Dict:
 
 def saveConfigs(path: Path, conf: Dict):
     with path.open('w', encoding='utf8') as f:
-        json.dump(conf.to_dict(), f, ensure_ascii=False)
+        json.dump(conf.to_dict(), f)
 
 
 conf = loadConfigs(PATHS.CONF)
