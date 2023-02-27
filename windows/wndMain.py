@@ -138,24 +138,29 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.labAccntDisp.setText(username)
         self.loggedIn = True
 
-    def onNamesAdded(self, dir: Path, added_names: set[str]):
-        """auto make torrents on new names added"""
+    def onNamesAdded(self, relnames: set[Path]):
+        """auto make torrents on new video names added.
+        relnames are relative to root
+        """
         # 不需要select，内容会直接更新
-        paths = set(dir.joinpath(name) for name in added_names)
-        print('on added', paths)
-        self.sourceModel.addPendings(paths)
-        td = TorrentMakerThread(self, paths, silent=True)
-        td.start()
-        # 无论种子是否添加都要removePending，防止卡住
-        td.finished.connect(lambda: self.sourceModel.removePendings(paths))
+        if conf.autoMakeTorrent:
+            fullnames = set(self.root.joinpath(relname) for relname in relnames)
+            self.sourceModel.addPendings(fullnames)
+            td = TorrentMakerThread(self, fullnames, silent=True)
+            td.start()
+            # 无论种子是否添加都要removePending，防止卡住
+            td.finished.connect(lambda: self.sourceModel.removePendings(fullnames))
 
-    def onTorrentsAdded(self, dir: Path, added_torrents: set[str]):
-        print('add torrents:', '\n'.join(added_torrents))
-        vidpaths = set()
-        for added in added_torrents:
-            name = added.removesuffix('.torrent')
-            vidpaths.add(dir.joinpath(name))
-        self.sourceModel.removePendings(vidpaths)
+    def onTorrentsAdded(self, reltorrents: set[Path]):
+        """remove pending mark of corresponding video name.
+        reltorrents are relative to root
+        """
+        fullnames = set()
+        for reltorrent in reltorrents:
+            relname = str(reltorrent).removesuffix('.torrent')
+            fullname = self.root.joinpath(relname)
+            fullnames.add(fullname)
+        self.sourceModel.removePendings(fullnames)
 
     @wait_on_heavy_process
     def updatePubtypeByRow(self, row: int, proxyModel: ProxyTableModel, newPubtype: PubType):

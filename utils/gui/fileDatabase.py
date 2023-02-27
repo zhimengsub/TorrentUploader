@@ -35,16 +35,6 @@ class FileDatabase(QSqlDatabase):
         if not self.transaction():
             raise SqlError('transaction() returns False!')
 
-    def purge(self, root: Path):
-        '''remove items that no longer exists in filesystem.'''
-        removed = []
-        for name, reldir in self.selectPaths(root):
-            filepath = root / reldir / name
-            if not filepath.exists():
-                removed.append((name, reldir))
-        for name, reldir in removed:
-            self.removeItem(root, name, reldir)
-
     def createTableIfNotExist(self, root: Path):
         self.exec(f'CREATE TABLE IF NOT EXISTS "{escape(root)}" ('
                         'bt BOOLEAN NOT NULL,'
@@ -65,6 +55,14 @@ class FileDatabase(QSqlDatabase):
         self.raiseOnError()
         while res.next():
             yield str(res.value(0))
+    def selectRelnamesByPathRecursive(self, root: Path, reldir: Path) -> Iterator[Path]:
+        if str(reldir) == '.':
+            res = self.exec(f'SELECT name, relpath FROM "{escape(root)}";')
+        else:
+            res = self.exec(f'SELECT name, relpath FROM "{escape(root)}" WHERE relpath LIKE "{reldir}%";')
+        self.raiseOnError()
+        while res.next():
+            yield Path(str(res.value(1)), str(res.value(0)))
 
     def selectBtByPath(self, root: Path, reldir: Path, name: str) -> bool:
         res = self.exec(f'SELECT bt FROM "{escape(root)}" WHERE name = "{name}" AND relpath = "{reldir}";')
@@ -78,18 +76,29 @@ class FileDatabase(QSqlDatabase):
         while res.next():
             yield bool(res.value(0)), str(res.value(1))
 
+    def selectBtsNamesByPathRecursive(self, root: Path, reldir: Path) -> Iterator[tuple[bool, str, str]]:
+        if str(reldir) == '.':
+            res = self.exec(f'SELECT bt, name, relpath FROM "{escape(root)}";')
+        else:
+            res = self.exec(f'SELECT bt, name, relpath FROM "{escape(root)}" WHERE relpath LIKE "{reldir}%";')
+        self.raiseOnError()
+        while res.next():
+            yield bool(res.value(0)), str(res.value(1)), str(res.value(2))
+
     def selectPaths(self, root: Path) -> Iterator[tuple[str, Path]]:
         res = self.exec(f'SELECT name, relpath FROM "{escape(root)}";')
         self.raiseOnError()
         while res.next():
             yield str(res.value(0)), Path(str(res.value(1)))
 
-    def addItems(self, root: Path, names: Iterable[str], reldir: Path, pubtype: PubType=PubType.Todo):
+    def addItems(self, root: Path, relnames: Iterable[Path], pubtype: PubType=PubType.Todo):
         self.batch_start()
-        for name in names:
-            path = root / reldir / name
-            bt = int(exists_bt(path))
-            mtime = get_mtime(path)
+        for relname in relnames:
+            reldir = relname.parents[0]
+            name = relname.name
+            fullfile = root / relname
+            bt = int(exists_bt(fullfile))
+            mtime = get_mtime(fullfile)
             self.exec(f'INSERT INTO "{escape(root)}"(bt, name, relpath, pubtype, mtime) VALUES("{bt}", "{name}", "{reldir}", {pubtype.value}, {mtime});')
         self.commit()
         self.raiseOnError()
@@ -98,9 +107,11 @@ class FileDatabase(QSqlDatabase):
         self.exec(f'DELETE FROM "{escape(root)}" WHERE name = "{name}" AND relpath = "{reldir}";')
         self.raiseOnError()
 
-    def removeItems(self, root: Path, names: Iterable[str], reldir: Path):
+    def removeItems(self, root: Path, relnames: Iterable[Path]):
         self.batch_start()
-        for name in names:
+        for relname in relnames:
+            reldir = relname.parents[0]
+            name = relname.name
             self.exec(f'DELETE FROM "{escape(root)}" WHERE name = "{name}" AND relpath = "{reldir}";')
         self.commit()
         self.raiseOnError()
@@ -109,10 +120,12 @@ class FileDatabase(QSqlDatabase):
         self.exec(f'UPDATE "{escape(root)}" SET bt={int(newBT)} WHERE name="{name}" AND relpath="{reldir}";')
         self.raiseOnError()
 
-    def updateBTs(self, root: Path, names: Iterable[str], reldir: Union[Path, str], newBT: bool):
+    def updateBTs(self, root: Path, relnames: Iterable[Path], newBT: bool):
         if not self.transaction():
             raise SqlError('transaction() returns False!')
-        for name in names:
+        for relname in relnames:
+            reldir = relname.parents[0]
+            name = relname.name
             self.exec(f'UPDATE "{escape(root)}" SET bt={int(newBT)} WHERE name="{name}" AND relpath="{reldir}";')
         self.commit()
         self.raiseOnError()

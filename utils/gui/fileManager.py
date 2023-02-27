@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterator, Iterable
+from typing import Iterator, Iterable, Union
 
 from PyQt5.QtCore import QFileSystemWatcher, QObject, pyqtSignal, pyqtBoundSignal
 
@@ -12,8 +12,8 @@ from utils.gui.fileDatabase import FileDatabase
 class FileManager(QObject):
     """Watch for (video) file changes, and sync result to database"""
     tableChanged = pyqtSignal()  # type: pyqtBoundSignal
-    namesAdded = pyqtSignal(Path, set)  # type: pyqtBoundSignal
-    torrentsAdded = pyqtSignal(Path, set)  # type: pyqtBoundSignal
+    namesAdded = pyqtSignal(set)  # type: pyqtBoundSignal
+    torrentsAdded = pyqtSignal(set)  # type: pyqtBoundSignal
 
     def __init__(self, parent: QObject=None):
         super().__init__(parent)
@@ -27,21 +27,31 @@ class FileManager(QObject):
         # TODO GUI：查看监控目录
 
     @staticmethod
-    def torrents(path: Path) -> Iterator[str]:
-        """return torrent names iterator"""
+    def torrents(fulldir: Path, recursive, rel_to:Path=None) -> Iterator[Path]:
+        """return torrent fullfile (if not `rel_to`) or relfile (if `rel_to`) iterator under a path"""
         # use Path.glob on root for simplicity
-        for p in path.glob('*.torrent'):
-            yield p.name
+        if recursive:
+            globpat = '**/*.torrent'
+        else:
+            globpat = '*.torrent'
+
+        for p in fulldir.glob(globpat):
+            yield Path(p).relative_to(rel_to) if rel_to else Path(p)
 
     @staticmethod
-    def videos(path: Path) -> Iterator[str]:
-        """return video names iterator under a path"""
-        for p in path.iterdir():
+    def videos(fulldir: Path, recursive, rel_to:Path=None) -> Iterator[Path]:
+        """return video fullfile (if not `rel_to`) or relfile (if `rel_to`) iterator under a path"""
+        if recursive:
+            globpat = '**/*.*'
+        else:
+            globpat = '*.*'
+
+        for p in fulldir.glob(globpat):
             if p.suffix in SUFF.VID:
-                yield p.name
+                yield Path(p).relative_to(rel_to) if rel_to else Path(p)
 
     @staticmethod
-    def diff(oldlist: Iterable[str], newlist: Iterable[str]) -> tuple[set[str], set[str]]:
+    def diff(oldlist: Union[Iterable[str], Iterable[Path]], newlist: Union[Iterable[str], Iterable[Path]]) -> Union[tuple[set[str], set[str]], tuple[set[Path], set[Path]]]:
         oldset, newset = set(oldlist), set(newlist)
         added = newset - oldset
         removed = oldset - newset
@@ -49,21 +59,18 @@ class FileManager(QObject):
 
     def watchDir(self, dir: Path):
         alldirs = self.watcher.directories()
-        added, _ = self.diff(alldirs, [str(dir)])
-        if not added:
+        if str(dir) in alldirs:
             return
-        fails = self.watcher.addPaths(added)
-        #success = self.watcher.addPath(str(dir))
-        #if not success:
-        #   raise DirectoryWatchFailed([str(dir)])
-        if fails:
-            raise DirectoryWatchFailed(fails)
+        success = self.watcher.addPath(str(dir))
+        if not success:
+            raise DirectoryWatchFailed([str(dir)])
+        print('add to watch list:\n'+str(dir))
 
     def watchSubdirsRecursively(self, dir: Path):
-        """Add `dir`'s subdirs to watchlist, also watch `dir` if `inclusive`"""
+        """Add `dir`'s subdirs to watchlist"""
         alldirs = self.watcher.directories()
         pattern = '*/**'
-        subdirs = list(map(str, dir.glob(pattern)))
+        subdirs = map(str, dir.glob(pattern))
         added, _ = self.diff(alldirs, subdirs)
         if not added:
             return
@@ -72,49 +79,53 @@ class FileManager(QObject):
             # fails = self.watcher.addPaths(subdirs)
             if fails:
                 raise DirectoryWatchFailed(fails)
+            print('add to watch list:\n', '\n'.join(added))
 
-    def scanVideoChanges(self, watched_dir: Path) -> tuple[set[str], set[str]]:
-        # determine if video file has changed by doing some set calculation
+    def scanVideoChanges(self, watched_dir: Path) -> tuple[set[Path], set[Path]]:
+        """determine if video file has changed by doing some set calculation
+        :returns added and removed video file path relative to `self.root`
+        """
         reldir = watched_dir.relative_to(self.root)
-        old_names = self.db.selectNamesByPath(self.root, reldir)
-        new_names = self.videos(watched_dir)
-        added, removed = self.diff(old_names, new_names)
+        old_relnames = self.db.selectRelnamesByPathRecursive(self.root, reldir)
+        new_relnames = self.videos(watched_dir, recursive=True, rel_to=self.root)
+        added, removed = self.diff(old_relnames, new_relnames)
         return added, removed
 
-    def scanTorrentChanges(self, watched_dir: Path) -> tuple[set[str], set[str]]:
-        # determine if torrent file has changed according to existed video files
+    def scanTorrentChanges(self, watched_dir: Path) -> tuple[set[Path], set[Path]]:
+        """determine if torrent file has changed according to existed video files
+        :returns added and removed torrent file path relative to `self.root`
+        """
         reldir = watched_dir.relative_to(self.root)
-        old_torrents = []
-        for old_bt, old_vidname in self.db.selectBtsNamesByPath(self.root, reldir):
+        old_reltorrents = []
+        for old_bt, old_vidname, old_reldir in self.db.selectBtsNamesByPathRecursive(self.root, reldir):
             if old_bt:
-                old_torrents.append(old_vidname + '.torrent')
-        new_torrents = self.torrents(watched_dir)
-        added, removed = self.diff(old_torrents, new_torrents)
+                old_reltorrents.append(Path(old_reldir, old_vidname + '.torrent'))
+        new_reltorrents = self.torrents(watched_dir, recursive=True, rel_to=self.root)
+        added, removed = self.diff(old_reltorrents, new_reltorrents)
         return added, removed
 
-    def onVideoChanged(self, watched_dir: Path, added_names: set[str], removed_names: set[str]):
+    def onVideoChanged(self, added_relnames: set[Path], removed_relnames: set[Path]):
         """Sync (add/remove) video files in **watched_dir** to database"""
-        reldir = watched_dir.relative_to(self.root)
-        if added_names:
-            self.db.addItems(self.root, added_names, reldir, PubType.Todo)
-        if removed_names:
-            self.db.removeItems(self.root, removed_names, reldir)
+        if added_relnames:
+            self.db.addItems(self.root, added_relnames, PubType.Todo)
+        if removed_relnames:
+            self.db.removeItems(self.root, removed_relnames)
 
-    def onTorrentChanged(self, watched_dir: Path, added_torrents: set[str], removed_torrents: set[str]):
+    def onTorrentChanged(self, added_reltorrents: set[Path], removed_reltorrents: set[Path]):
         """
         Sync (add/remove) torrent files in **watched_dir** to database
         """
-        reldir = watched_dir.relative_to(self.root)
-        names = [torrent.removesuffix('.torrent') for torrent in added_torrents]
-        self.db.updateBTs(self.root, names, reldir, newBT=True)
+        relnames = [Path(str(reltorrent).removesuffix('.torrent')) for reltorrent in added_reltorrents]
+        self.db.updateBTs(self.root, relnames, newBT=True)
 
-        names = [torrent.removesuffix('.torrent') for torrent in removed_torrents]
-        self.db.updateBTs(self.root, names, reldir, newBT=False)
+        relnames = [Path(str(reltorrent).removesuffix('.torrent')) for reltorrent in removed_reltorrents]
+        self.db.updateBTs(self.root, relnames, newBT=False)
 
     def onDirectoryChanged(self, watched_dir: Path, block_signals: bool):
-        """sync to db if video/torrent changed, and add `watched_dir`'s subfolders to watch list"""
+        """scan `watched_dir` recursively, sync status to db if video/torrent changed,
+        and add `watched_dir`'s subfolders to watch list"""
         if not watched_dir.exists():
-            # on watched_dir removed (seems like this is not allowed by OS  as long as the program is running)
+            # on watched_dir removed (seems like this is not allowed by OS as long as the program is running)
             print('dir', str(watched_dir), 'is removed!')
             # self.watcher.removePath(watched_dir)  # 不存在时会remove失败
             self.db.dropTable(watched_dir)
@@ -122,29 +133,30 @@ class FileManager(QObject):
                 self.tableChanged.emit()
             return
 
-        # FIXME unable to handle on subfolder removed, need to make the following
-        #  scanning recursively.
-        #  The lazy way: call self.db.purge() then emit corresponding signals if purged any.
-
-        # scan for video file changes
-        added_names, removed_names = self.scanVideoChanges(watched_dir)
-        if added_names or removed_names:
-            self.onVideoChanged(watched_dir, added_names, removed_names)
+        # scan for video file changes recursively in case subfolder addition / deletion
+        added_relnames, removed_relnames = self.scanVideoChanges(watched_dir)
+        if added_relnames or removed_relnames:
+            print('videos added:\n', '\n'.join(map(str, added_relnames)))
+            print('videos removed:\n', '\n'.join(map(str, removed_relnames)))
+            self.onVideoChanged(added_relnames, removed_relnames)
             if not block_signals:
                 self.tableChanged.emit()
-        if added_names and not block_signals:
-            self.namesAdded.emit(watched_dir, added_names)
+        if added_relnames and not block_signals:
+            self.namesAdded.emit(added_relnames)
 
-        # scan for torrent file changes
-        added_torrents, removed_torrents = self.scanTorrentChanges(watched_dir)
-        if added_torrents or removed_torrents:
-            self.onTorrentChanged(watched_dir, added_torrents, removed_torrents)
+        # scan for torrent file changes recursively in case subfolder addition / deletion
+        added_reltorrents, removed_reltorrents = self.scanTorrentChanges(watched_dir)
+        if added_reltorrents or removed_reltorrents:
+            print('torrents added:\n', '\n'.join(map(str, added_reltorrents)))
+            print('torrents removed:\n', '\n'.join(map(str, removed_reltorrents)))
+            self.onTorrentChanged(added_reltorrents, removed_reltorrents)
             if not block_signals:
                 self.tableChanged.emit()
-        if added_torrents and not block_signals:
-            self.torrentsAdded.emit(watched_dir, added_torrents)
-        # if has subdirs, add to watchlist
-        # (watcher does not support removing nonexist dir)
+        if added_reltorrents and not block_signals:
+            self.torrentsAdded.emit(added_reltorrents)
+
+        # if any subdir, add to watchlist
+        # (watcher does not support removing nonexistent dir)
         self.watchSubdirsRecursively(watched_dir)
 
     def updateRoot(self, root: Path):
@@ -155,13 +167,11 @@ class FileManager(QObject):
             self.watcher.removePaths(old)
 
         self.db.createTableIfNotExist(self.root)
-        self.db.purge(self.root)
+
         self.watchDir(self.root)
         # considering there may be changes when this tool is offline,
         # manually sync all changes to database recursively
-        for dir in self.root.glob('**'):
-            # iteration include self.root
-            self.onDirectoryChanged(Path(dir), block_signals=True)
+        self.onDirectoryChanged(self.root, block_signals=True)
 
 
 if __name__ == '__main__':
