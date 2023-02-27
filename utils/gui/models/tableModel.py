@@ -41,23 +41,23 @@ class TableModel(QSqlTableModel):
 
     def updatePubtype(self, index: QModelIndex, newPubtype: PubType):
         nameIndex = index.siblingAtColumn(TDB.COL_NAME)
-        relpathIndex = index.siblingAtColumn(TDB.COL_RELPATH)
+        reldirIndex = index.siblingAtColumn(TDB.COL_RELDIR)
 
         name = nameIndex.data()
-        relpath = relpathIndex.data()
-        self.manager.db.updatePubtype(self.root, name, relpath, newPubtype)
+        reldir = reldirIndex.data()
+        self.manager.db.updatePubtype(self.root, name, reldir, newPubtype)
         self.select()
 
     def updatePubtypes(self, indexes: Iterable[QModelIndex], newPubtype: PubType):
         names = []
-        relpaths = []
+        reldirs = []
         for index in indexes:
             nameIndex = index.siblingAtColumn(TDB.COL_NAME)
-            relpathIndex = index.siblingAtColumn(TDB.COL_RELPATH)
+            reldirIndex = index.siblingAtColumn(TDB.COL_RELDIR)
             names.append(nameIndex.data())
-            relpaths.append(relpathIndex.data())
+            reldirs.append(reldirIndex.data())
 
-        self.manager.db.updatePubtypes(self.root, names, relpaths, newPubtype)
+        self.manager.db.updatePubtypes(self.root, names, reldirs, newPubtype)
         self.select()
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
@@ -65,8 +65,8 @@ class TableModel(QSqlTableModel):
             if index.column() == TDB.COL_BT:
                 # change column BT display symbol
                 nameIdx = index.siblingAtColumn(TDB.COL_NAME)
-                relpathIdx = index.siblingAtColumn(TDB.COL_RELPATH)
-                path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+                reldirIdx = index.siblingAtColumn(TDB.COL_RELDIR)
+                path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
                 if path in self.pendingPaths:
                     return SYMB.PEND
                 exists_bt = bool(super().data(index))

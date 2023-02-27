@@ -75,17 +75,17 @@ class FileManager(QObject):
 
     def scanVideoChanges(self, watched_dir: Path) -> tuple[set[str], set[str]]:
         # determine if video file has changed by doing some set calculation
-        relpath = watched_dir.relative_to(self.root)
-        old_names = self.db.selectNamesByPath(self.root, relpath)
+        reldir = watched_dir.relative_to(self.root)
+        old_names = self.db.selectNamesByPath(self.root, reldir)
         new_names = self.videos(watched_dir)
         added, removed = self.diff(old_names, new_names)
         return added, removed
 
     def scanTorrentChanges(self, watched_dir: Path) -> tuple[set[str], set[str]]:
         # determine if torrent file has changed according to existed video files
-        relpath = watched_dir.relative_to(self.root)
+        reldir = watched_dir.relative_to(self.root)
         old_torrents = []
-        for old_bt, old_vidname in self.db.selectBtsNamesByPath(self.root, relpath):
+        for old_bt, old_vidname in self.db.selectBtsNamesByPath(self.root, reldir):
             if old_bt:
                 old_torrents.append(old_vidname + '.torrent')
         new_torrents = self.torrents(watched_dir)
@@ -94,22 +94,22 @@ class FileManager(QObject):
 
     def onVideoChanged(self, watched_dir: Path, added_names: set[str], removed_names: set[str]):
         """Sync (add/remove) video files in **watched_dir** to database"""
-        relpath = watched_dir.relative_to(self.root)
+        reldir = watched_dir.relative_to(self.root)
         if added_names:
-            self.db.addItems(self.root, added_names, relpath, PubType.Todo)
+            self.db.addItems(self.root, added_names, reldir, PubType.Todo)
         if removed_names:
-            self.db.removeItems(self.root, removed_names, relpath)
+            self.db.removeItems(self.root, removed_names, reldir)
 
     def onTorrentChanged(self, watched_dir: Path, added_torrents: set[str], removed_torrents: set[str]):
         """
         Sync (add/remove) torrent files in **watched_dir** to database
         """
-        relpath = watched_dir.relative_to(self.root)
+        reldir = watched_dir.relative_to(self.root)
         names = [torrent.removesuffix('.torrent') for torrent in added_torrents]
-        self.db.updateBTs(self.root, names, relpath, newBT=True)
+        self.db.updateBTs(self.root, names, reldir, newBT=True)
 
         names = [torrent.removesuffix('.torrent') for torrent in removed_torrents]
-        self.db.updateBTs(self.root, names, relpath, newBT=False)
+        self.db.updateBTs(self.root, names, reldir, newBT=False)
 
     def onDirectoryChanged(self, watched_dir: Path, block_signals: bool):
         """sync to db if video/torrent changed, and add `watched_dir`'s subfolders to watch list"""

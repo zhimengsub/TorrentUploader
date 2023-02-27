@@ -87,7 +87,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         self.viewDone.setModel(self.proxyModels[PubType.Done])
         self.viewDone.setSortingEnabled(True)
-        self.viewDone.sortByColumn(TDB.COL_RELPATH, Qt.DescendingOrder)
+        self.viewDone.sortByColumn(TDB.COL_RELDIR, Qt.DescendingOrder)
         # for debug:
         # print('source model')
         # self.viewTodo.setModel(self.sourceModel)
@@ -204,8 +204,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
         view.selectRow(row)
 
         nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
-        relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
-        vidpath = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+        reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
+        vidpath = self.root.joinpath(reldirIdx.data(), nameIdx.data())
         torrentpath = Path(str(vidpath) + '.torrent')
         try:
             resp = self.client.upload_torrent(torrentpath, self.myteam.id)
@@ -237,8 +237,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
             row = idx.row()
 
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
-            relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
-            vidpath = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
+            vidpath = self.root.joinpath(reldirIdx.data(), nameIdx.data())
             torrentpath = Path(str(vidpath) + '.torrent')
             try:
                 resp = self.client.upload_torrent(torrentpath, self.myteam.id)
@@ -282,13 +282,13 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         paths = set()
         for idx in idxes:
-            relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
+            reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
             # 从idx得到的结果是符号
-            btExisted = self.sourceModel.manager.db.selectBtByPath(self.root, relpathIdx.data(), nameIdx.data())
+            btExisted = self.sourceModel.manager.db.selectBtByPath(self.root, reldirIdx.data(), nameIdx.data())
             if btExisted:
                 continue
-            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
             paths.add(path)
 
         self.sourceModel.addPendings(paths)
@@ -304,8 +304,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
         for idx in view.selectedIndexes():
             # note multiple indexes when selecting the whole line
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
-            relpathIdx = nameIdx.siblingAtColumn(TDB.COL_RELPATH)
-            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            reldirIdx = nameIdx.siblingAtColumn(TDB.COL_RELDIR)
+            path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
             self.openInExplorer(path)
             # only open the first file in selection
             break
@@ -346,8 +346,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
     def on_view_doubleClicked(self, index: QModelIndex):
         # open in explorer
         nameIdx = index.siblingAtColumn(TDB.COL_NAME)
-        relpathIdx = index.siblingAtColumn(TDB.COL_RELPATH)
-        path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+        reldirIdx = index.siblingAtColumn(TDB.COL_RELDIR)
+        path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
         self.openInExplorer(path)
 
     @pyqtSlot(QModelIndex)
