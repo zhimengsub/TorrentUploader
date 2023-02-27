@@ -205,18 +205,18 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
         reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
-        vidpath = self.root.joinpath(reldirIdx.data(), nameIdx.data())
-        torrentpath = Path(str(vidpath) + '.torrent')
+        fullname = self.root.joinpath(reldirIdx.data(), nameIdx.data())
+        fulltorrent = Path(str(fullname) + '.torrent')
         try:
-            resp = self.client.upload_torrent(torrentpath, self.myteam.id)
+            resp = self.client.upload_torrent(fulltorrent, self.myteam.id)
             assert resp, 'resp 为空!'
         except (UploadTorrentException, Exception) as e:
             on_exception(self, '文件上传失败 ' + type(e).__name__ + '\n', str(e))
             return
 
-        while torrentpath.suffix:
-            torrentpath = torrentpath.with_suffix('')
-        title = torrentpath.stem
+        while fulltorrent.suffix:
+            fulltorrent = fulltorrent.with_suffix('')
+        title = fulltorrent.stem
 
         wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
         wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
@@ -238,18 +238,18 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
             reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
-            vidpath = self.root.joinpath(reldirIdx.data(), nameIdx.data())
-            torrentpath = Path(str(vidpath) + '.torrent')
+            fullname = self.root.joinpath(reldirIdx.data(), nameIdx.data())
+            fulltorrent = Path(str(fullname) + '.torrent')
             try:
-                resp = self.client.upload_torrent(torrentpath, self.myteam.id)
+                resp = self.client.upload_torrent(fulltorrent, self.myteam.id)
                 assert resp, 'resp 为空!'
             except (UploadTorrentException, Exception) as e:
                 on_exception(self, nameIdx.data() + ' 文件上传失败 ' + type(e).__name__ + '\n', str(e))
                 continue
 
-            while torrentpath.suffix:
-                torrentpath = torrentpath.with_suffix('')
-            title = torrentpath.stem
+            while fulltorrent.suffix:
+                fulltorrent = fulltorrent.with_suffix('')
+            title = fulltorrent.stem
 
             try:
                 pubInfo = PublishInfo(self.myteam, resp, title)

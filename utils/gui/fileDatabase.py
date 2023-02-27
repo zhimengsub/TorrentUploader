@@ -144,21 +144,4 @@ class FileDatabase(QSqlDatabase):
 
 
 if __name__ == "__main__":
-    db = FileDatabase()
-    from pathlib import Path
-    root = Path(r'D:')
-    tr = Path(r'D:\test\[织梦字幕组].torrent')
-    reldir = tr.relative_to(root)
-    db.open()
-    print(db.tables())
-    db.createTableIfNotExist(root)
-    names = ['a.torrent', 'b.torrent']
-    names2 = ['c.torrent', 'b.torrent']
-    db.addItems(root, names, reldir)
-    print()
-    # db.updatePubtype(root, tr.name, reldir, PubType.Done)
-    # for item in db.selectItemsByPath(root, reldir):
-    #     print(item)
-    # print()
-    db.removeItems(root, names, reldir)
-    db.close()
+    pass

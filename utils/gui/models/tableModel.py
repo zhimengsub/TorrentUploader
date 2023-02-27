@@ -23,7 +23,7 @@ class TableModel(QSqlTableModel):
         self.manager.tableChanged.connect(self.select)
         self.setEditStrategy(self.OnManualSubmit)
         self.root = None
-        self.pendingPaths = set()
+        self.pendingFullnames = set()  # determine if bt icon should be pending (during copy or making torrent)
 
     def updateRoot(self, root: Path) -> None:
         """Set model data according to `root`"""
@@ -66,18 +66,18 @@ class TableModel(QSqlTableModel):
                 # change column BT display symbol
                 nameIdx = index.siblingAtColumn(TDB.COL_NAME)
                 reldirIdx = index.siblingAtColumn(TDB.COL_RELDIR)
-                path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
-                if path in self.pendingPaths:
+                fullname = self.root.joinpath(reldirIdx.data(), nameIdx.data())
+                if fullname in self.pendingFullnames:
                     return SYMB.PEND
                 exists_bt = bool(super().data(index))
                 return SYMB.YES if exists_bt else SYMB.NO
         return super().data(index, role)
 
-    def addPendings(self, vidpaths: set[Path]):
-        self.pendingPaths = self.pendingPaths.union(vidpaths)
+    def addPendings(self, fullnames: set[Path]):
+        self.pendingFullnames = self.pendingFullnames.union(fullnames)
 
-    def removePendings(self, vidpaths: set[Path]):
-        self.pendingPaths = self.pendingPaths - vidpaths
+    def removePendings(self, fullnames: set[Path]):
+        self.pendingFullnames = self.pendingFullnames - fullnames
 
     def raiseOnError(self):
         err = self.lastError()
