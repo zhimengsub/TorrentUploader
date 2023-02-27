@@ -124,14 +124,16 @@ class FileManager(QObject):
     def onDirectoryChanged(self, watched_dir: Path, block_signals: bool):
         """scan `watched_dir` recursively, sync status to db if video/torrent changed,
         and add `watched_dir`'s subfolders to watch list"""
-        if not watched_dir.exists():
-            # on watched_dir removed (seems like this is not allowed by OS as long as the program is running)
-            print('dir', str(watched_dir), 'is removed!')
-            # self.watcher.removePath(watched_dir)  # 不存在时会remove失败
-            self.db.dropTable(watched_dir)
-            if not block_signals:
-                self.tableChanged.emit()
-            return
+        # if not watched_dir.exists():
+        #     # on watched_dir removed (seems like removing root is not allowed by OS as long as the program is running)
+        #     # Note: 本来是为了解决整个文件夹删除的情况，现在用了递归搜索文件变化就用不到这个功能了。
+        #     #  不用这个功能的话，就算删除某个作为root的文件夹，再复原时也可以保持原来的发布状态
+        #     print('dir', str(watched_dir), 'is removed!')
+        #     # self.watcher.removePath(watched_dir)  # 不存在时会remove失败
+        #     self.db.dropTable(watched_dir)
+        #     if not block_signals:
+        #         self.tableChanged.emit()
+        #     return
 
         # scan for video file changes recursively in case subfolder addition / deletion
         added_relnames, removed_relnames = self.scanVideoChanges(watched_dir)
