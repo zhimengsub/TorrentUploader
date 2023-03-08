@@ -1,8 +1,10 @@
 from datetime import datetime
-from typing import List, Optional, Union
+from functools import lru_cache
+from typing import List, Optional, Type, Union
 
+import regex as re
 from httpcore import URL
-from httpx import Client, Cookies
+from httpx import Client, Cookies, Response
 from pydantic import Field
 from requests.utils import cookiejar_from_dict
 from typing_extensions import Self
@@ -17,11 +19,11 @@ from errors import (
 from models.bangumi import (
     BangumiResponse,
     My,
+    MyTeam,
     Tag,
     Torrent,
     UploadResponse,
     Uploader,
-    MyTeam,
 )
 from utils import jsonlib as json
 from utils.const import BANGUMI_MOE_HOST, PROJECT_ROOT
@@ -53,14 +55,16 @@ class Bangumi(Uploader, Net):
                 "origin": "https://bangumi.moe",
                 "referer": "https://bangumi.moe/",
             },
-            proxies=proxies
+            proxies=proxies,
         )
-        response = client.get('/')
+        response = client.get("/")
         response.raise_for_status()
         return True
 
     @classmethod
-    def login_with_password(cls, username: str, password: str, proxies: dict = None) -> Self:
+    def login_with_password(
+        cls, username: str, password: str, proxies: dict = None
+    ) -> Self:
         """使用用户名和密码来登录"""
         client = Client(
             base_url=BANGUMI_MOE_HOST,
@@ -72,7 +76,7 @@ class Bangumi(Uploader, Net):
                 "origin": "https://bangumi.moe",
                 "referer": "https://bangumi.moe/",
             },
-            proxies=proxies
+            proxies=proxies,
         )
         response = client.post(
             "/api/user/signin",
@@ -82,18 +86,14 @@ class Bangumi(Uploader, Net):
         json_data = json.loads(response.text)
         if not json_data["success"]:
             raise LoginFailed("登录失败，请检查您输入的用户名或密码是否正确。")
-        result = cls.parse_obj(
-            json_data["user"] | {"cookies": response.cookies}
-        )
+        result = cls.parse_obj(json_data["user"] | {"cookies": response.cookies})
         result._client = client
         return result
 
     @classmethod
-    def login_with_cookies(cls, path: StrOrPath, proxies: dict=None) -> Self:
+    def login_with_cookies(cls, path: StrOrPath, proxies: dict = None) -> Self:
         """使用保存的cookies来登录"""
-        with open(
-            PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8"
-        ) as file:
+        with open(PROJECT_ROOT.joinpath(path).resolve(), encoding="utf-8") as file:
             json_data = json.load(file)
         cookiejar = cookiejar_from_dict(json_data)
         cookies = Cookies(cookiejar)
@@ -108,7 +108,7 @@ class Bangumi(Uploader, Net):
                 "origin": "https://bangumi.moe",
                 "referer": "https://bangumi.moe/",
             },
-            proxies=proxies
+            proxies=proxies,
         )
         response = client.get("/api/user/session", cookies=cookies)
         response.raise_for_status()
@@ -136,7 +136,9 @@ class Bangumi(Uploader, Net):
             my_teams.append(MyTeam.parse_obj(json_data))
         return my_teams
 
-    def upload_torrent(self, path: StrOrPath, team_id: Optional[str]=None) -> UploadResponse:
+    def upload_torrent(
+        self, path: StrOrPath, team_id: Optional[str] = None
+    ) -> UploadResponse:
         """上传指定路径的种子文件"""
         path = PROJECT_ROOT.joinpath(path).resolve()
         if not path.exists():
@@ -145,9 +147,12 @@ class Bangumi(Uploader, Net):
         if team_id:
             data = {"team_id": team_id}
         response = self.post(
-            "/api/v2/torrent/upload", data=data, files={"file": path.open("rb")}, timeout=None
+            "/api/v2/torrent/upload",
+            data=data,
+            files={"file": path.open("rb")},
+            timeout=None,
         )
-        response.raise_for_status()
+        self.raise_for_status(response, UploadTorrentException)
         response_obj = BangumiResponse.parse_raw(response.text)
         if not response_obj.success:  # 若上传错误
             if "torrent same as" in response_obj.message:
@@ -178,13 +183,12 @@ class Bangumi(Uploader, Net):
         introduction: str,
         team_id: str,
         tags: List[Union[str, Tag]] = None,
-        btskey: Optional[str] = '',
+        btskey: Optional[str] = "",
         teamsync: Optional[bool] = False,
     ) -> Torrent:
         """发布种子"""
         tags = tags or []
         tags = [(i.id if isinstance(i, Tag) else i) for i in tags]
-
 
         jsondata = {
             "category_tag_id": category_tag_id,
@@ -199,15 +203,32 @@ class Bangumi(Uploader, Net):
         if team_id:
             jsondata["team_id"] = team_id
         if teamsync:
-            jsondata["teamsync"] = '1'
+            jsondata["teamsync"] = "1"
 
-        response = self.post(
-            "/api/torrent/add",
-            json=jsondata,
-            timeout=None
-        )
-        response.raise_for_status()
+        response = self.post("/api/torrent/add", json=jsondata, timeout=None)
+        self.raise_for_status(response, PublishFailed)
         response_obj = BangumiResponse.parse_raw(response.text)
         if not response_obj.success:  # 若发布错误
             raise PublishFailed("发布错误" + ((": " + response_obj.message) or ""))
         return Torrent.parse_obj(response_obj.__dict__["torrent"])
+
+    @staticmethod
+    @lru_cache(64)
+    def get_error_msg(message: str) -> str:
+        patterns = {
+            r"^Error: Torrent is missing required field:\s*(.*)$": "种子缺少必要字段：%s"
+        }
+        for pattern, result in patterns.items():
+            if find := re.findall(pattern, message):
+                return result % find[0]
+        return message
+
+    def raise_for_status(self, response: Response, error_type: Type[Exception]) -> None:
+        if response.status_code != 200:
+            # noinspection PyBroadException
+            try:
+                message = response.json()["message"]
+            except:
+                response.raise_for_status()
+            else:
+                raise error_type(self.get_error_msg(message))
