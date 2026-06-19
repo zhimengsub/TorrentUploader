@@ -27,7 +27,7 @@ from windows.viewCtxMenu import ViewContextMenu
 from windows.wndLogin import WndLogin
 from windows.wndPubPreview import WndPubPreview
 from windows.wndSettings import WndSettings
-
+#FIXME 种子名字里有.时预测不到标题
 
 class WndMain(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -194,7 +194,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
     def on_actSettings_triggered(self):
         self.wndSettings.show()
 
-
+    # FIXME 右键菜单执行操作时assert一下是否符合条件：发布种子要存在种子；手动/自动制作种子时要设置bc路径；
     """Context Menu"""
     @wait_on_heavy_process
     def onPubMoreAction(self, view: QTableView, proxyModel: ProxyTableModel, newPubtype: PubType):

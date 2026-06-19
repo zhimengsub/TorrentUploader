@@ -43,6 +43,10 @@ def get_mtime(file: Path) -> float:
     return file.stat().st_mtime
 
 
+def get_size(file: Path) -> int:
+    return file.stat().st_size
+
+
 def exists_bt(fullname: Path) -> bool:
     btpath = Path(f'{fullname}.torrent')
     return btpath.exists()
@@ -64,11 +68,21 @@ def make_torrent(fullvid: Path, silent: bool):
 
 
 def wait_copy_complete(path: Path) -> bool:
+    last_mt = get_mtime(path)
+    last_size = get_size(path)
+    time.sleep(INTERVAL.POLL_COPY)
     while True:
         try:
-            # if copy is not complete, then PermissionError will be raised
+            if last_size != get_size(path) or last_mt != get_mtime(path):
+                last_mt = get_mtime(path)
+                last_size = get_size(path)
+                time.sleep(INTERVAL.POLL_COPY)
+                continue
+
             with path.open('rb+', 2):
+                # if copy is not complete, then PermissionError will be raised
                 break
+
         except PermissionError:
             time.sleep(INTERVAL.POLL_COPY)
             continue

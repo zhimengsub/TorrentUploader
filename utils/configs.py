@@ -42,7 +42,7 @@ def loadConfigs(path: Path) -> Dict:
 
 def saveConfigs(path: Path, conf: Dict):
     with path.open('w', encoding='utf8') as f:
-        json.dump(conf.to_dict(), f)
+        json.dump(conf.to_dict(), f, indent=4)
 
 
 conf = loadConfigs(PATHS.CONF)
