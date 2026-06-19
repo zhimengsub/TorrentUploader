@@ -2,7 +2,7 @@ from typing import Iterable
 
 
 class ApplicationException(Exception):
-    ...
+    """Application错误"""
 
 
 class LoginFailed(ApplicationException):
@@ -27,14 +27,16 @@ class TorrentDuplicateError(UploadTorrentException):
 
 class PredictionNotFoundInResponse(ApplicationException):
     """没有在上传种子的响应中找到预测标题"""
+
     def __init__(self):
-        super().__init__('没有在上传种子的响应中找到预测标题')
+        super().__init__("没有在上传种子的响应中找到预测标题")
 
 
 class BestPredictionNotFound(ApplicationException):
     """未找到最匹配的预测标题"""
+
     def __init__(self):
-        super().__init__('未找到最匹配的预测标题')
+        super().__init__("未找到最匹配的预测标题")
 
 
 class PublishFailed(ApplicationException):
@@ -42,7 +44,7 @@ class PublishFailed(ApplicationException):
 
 
 class GuiException(Exception):
-    ...
+    """GUI 错误"""
 
 
 class DirectoryWatchFailed(GuiException):
