@@ -9,6 +9,7 @@ from utils.const import SYMB
 from utils.gui.enums import PubType
 from utils.gui.fileDatabase import FileDatabase as TDB
 from utils.gui.fileManager import FileManager
+from utils.mypathlib import escape
 
 
 class TableModel(QSqlTableModel):
@@ -22,7 +23,7 @@ class TableModel(QSqlTableModel):
         self.manager.tableChanged.connect(self.select)
         self.setEditStrategy(self.OnManualSubmit)
         self.root = None
-        self.pendingPaths = set()
+        self.pendingFullnames = set()  # determine if bt icon should be pending (during copy or making torrent)
 
     def updateRoot(self, root: Path) -> None:
         """Set model data according to `root`"""
@@ -32,30 +33,31 @@ class TableModel(QSqlTableModel):
         # update `bt`, `mtime` fields
         self.manager.db.updateAllRedundancies(root)
         # change to table `root`
-        self.setTable(str(self.root))
+        self.setTable(escape(self.root))
+        print('last error:', self.lastError().text())
         # update model
         self.select()
         self.updatedRoot.emit()
 
     def updatePubtype(self, index: QModelIndex, newPubtype: PubType):
         nameIndex = index.siblingAtColumn(TDB.COL_NAME)
-        relpathIndex = index.siblingAtColumn(TDB.COL_RELPATH)
+        reldirIndex = index.siblingAtColumn(TDB.COL_RELDIR)
 
         name = nameIndex.data()
-        relpath = relpathIndex.data()
-        self.manager.db.updatePubtype(self.root, name, relpath, newPubtype)
+        reldir = reldirIndex.data()
+        self.manager.db.updatePubtype(self.root, name, reldir, newPubtype)
         self.select()
 
     def updatePubtypes(self, indexes: Iterable[QModelIndex], newPubtype: PubType):
         names = []
-        relpaths = []
+        reldirs = []
         for index in indexes:
             nameIndex = index.siblingAtColumn(TDB.COL_NAME)
-            relpathIndex = index.siblingAtColumn(TDB.COL_RELPATH)
+            reldirIndex = index.siblingAtColumn(TDB.COL_RELDIR)
             names.append(nameIndex.data())
-            relpaths.append(relpathIndex.data())
+            reldirs.append(reldirIndex.data())
 
-        self.manager.db.updatePubtypes(self.root, names, relpaths, newPubtype)
+        self.manager.db.updatePubtypes(self.root, names, reldirs, newPubtype)
         self.select()
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
@@ -63,19 +65,19 @@ class TableModel(QSqlTableModel):
             if index.column() == TDB.COL_BT:
                 # change column BT display symbol
                 nameIdx = index.siblingAtColumn(TDB.COL_NAME)
-                relpathIdx = index.siblingAtColumn(TDB.COL_RELPATH)
-                path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
-                if path in self.pendingPaths:
+                reldirIdx = index.siblingAtColumn(TDB.COL_RELDIR)
+                fullname = self.root.joinpath(reldirIdx.data(), nameIdx.data())
+                if fullname in self.pendingFullnames:
                     return SYMB.PEND
                 exists_bt = bool(super().data(index))
                 return SYMB.YES if exists_bt else SYMB.NO
         return super().data(index, role)
 
-    def addPendings(self, vidpaths: set[Path]):
-        self.pendingPaths = self.pendingPaths.union(vidpaths)
+    def addPendings(self, fullnames: set[Path]):
+        self.pendingFullnames = self.pendingFullnames.union(fullnames)
 
-    def removePendings(self, vidpaths: set[Path]):
-        self.pendingPaths = self.pendingPaths - vidpaths
+    def removePendings(self, fullnames: set[Path]):
+        self.pendingFullnames = self.pendingFullnames - fullnames
 
     def raiseOnError(self):
         err = self.lastError()

@@ -43,32 +43,46 @@ def get_mtime(file: Path) -> float:
     return file.stat().st_mtime
 
 
-def exists_bt(vidpath: Path) -> bool:
-    btpath = Path(f'{vidpath}.torrent')
+def get_size(file: Path) -> int:
+    return file.stat().st_size
+
+
+def exists_bt(fullname: Path) -> bool:
+    btpath = Path(f'{fullname}.torrent')
     return btpath.exists()
 
 
-def make_torrent(vidpath: Path, silent: bool):
-    cmd = [conf.exe.bc, '-m', str(vidpath)]
+def make_torrent(fullvid: Path, silent: bool):
+    cmd = [conf.exe.bc, '-m', str(fullvid)]
     if silent:
         cmd.append('-s')
     print(cmd)
     # limited loop in case error by BitComet
     for _ in range(RETRY.POLL_MAKEBT):
-        if exists_bt(vidpath):
+        if exists_bt(fullvid):
             break
         subprocess.run(cmd)
-        if exists_bt(vidpath):
+        if exists_bt(fullvid):
             break
         time.sleep(INTERVAL.POLL_MAKEBT)
 
 
 def wait_copy_complete(path: Path) -> bool:
+    last_mt = get_mtime(path)
+    last_size = get_size(path)
+    time.sleep(INTERVAL.POLL_COPY)
     while True:
         try:
-            # if copy is not complete, then PermissionError will be raised
+            if last_size != get_size(path) or last_mt != get_mtime(path):
+                last_mt = get_mtime(path)
+                last_size = get_size(path)
+                time.sleep(INTERVAL.POLL_COPY)
+                continue
+
             with path.open('rb+', 2):
+                # if copy is not complete, then PermissionError will be raised
                 break
+
         except PermissionError:
             time.sleep(INTERVAL.POLL_COPY)
             continue
@@ -83,15 +97,15 @@ def wait_copy_complete(path: Path) -> bool:
 
 
 class TorrentMakerThread(QThread):
-    def __init__(self, parent: QObject, vidpaths: Iterable[Path], silent: bool):
+    def __init__(self, parent: QObject, fullvids: Iterable[Path], silent: bool):
         super().__init__(parent)
-        self.vidpaths = vidpaths
+        self.fullvids = fullvids
         self.silent = silent
 
     def run(self) -> None:
-        for path in self.vidpaths:
-            if wait_copy_complete(path):
-                make_torrent(path, self.silent)
+        for fullvid in self.fullvids:
+            if wait_copy_complete(fullvid):
+                make_torrent(fullvid, self.silent)
 
 
 def parse_vidname(vidname) -> tuple[str, str]:

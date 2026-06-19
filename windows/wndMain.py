@@ -27,7 +27,7 @@ from windows.viewCtxMenu import ViewContextMenu
 from windows.wndLogin import WndLogin
 from windows.wndPubPreview import WndPubPreview
 from windows.wndSettings import WndSettings
-
+#FIXME 种子名字里有.时预测不到标题
 
 class WndMain(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -87,7 +87,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         self.viewDone.setModel(self.proxyModels[PubType.Done])
         self.viewDone.setSortingEnabled(True)
-        self.viewDone.sortByColumn(TDB.COL_RELPATH, Qt.DescendingOrder)
+        self.viewDone.sortByColumn(TDB.COL_RELDIR, Qt.DescendingOrder)
         # for debug:
         # print('source model')
         # self.viewTodo.setModel(self.sourceModel)
@@ -97,7 +97,12 @@ class WndMain(QMainWindow, Ui_MainWindow):
         if conf.wndWidth != -1:
             self.resize(conf.wndWidth, conf.wndHeight)
         if conf.root:
-            self.updateRoot(Path(conf.root))
+            root = Path(conf.root)
+            if root.exists():
+                self.updateRoot(root)
+            else:
+                on_exception(self, '工作目录', str(root), '不存在！', sep=' ')
+                conf.root = ''
         if conf.autoLogin:
             self.autoLogin()
 
@@ -133,24 +138,29 @@ class WndMain(QMainWindow, Ui_MainWindow):
         self.labAccntDisp.setText(username)
         self.loggedIn = True
 
-    def onNamesAdded(self, dir: Path, added_names: set[str]):
-        """auto make torrents on new names added"""
+    def onNamesAdded(self, relnames: set[Path]):
+        """auto make torrents on new video names added.
+        relnames are relative to root
+        """
         # 不需要select，内容会直接更新
-        paths = set(dir.joinpath(name) for name in added_names)
-        print('on added', paths)
-        self.sourceModel.addPendings(paths)
-        td = TorrentMakerThread(self, paths, silent=True)
-        td.start()
-        # 无论种子是否添加都要removePending，防止卡住
-        td.finished.connect(lambda: self.sourceModel.removePendings(paths))
+        if conf.autoMakeTorrent:
+            fullnames = set(self.root.joinpath(relname) for relname in relnames)
+            self.sourceModel.addPendings(fullnames)
+            td = TorrentMakerThread(self, fullnames, silent=True)
+            td.start()
+            # 无论种子是否添加都要removePending，防止卡住
+            td.finished.connect(lambda: self.sourceModel.removePendings(fullnames))
 
-    def onTorrentsAdded(self, dir: Path, added_torrents: set[str]):
-        print('add torrents:', '\n'.join(added_torrents))
-        vidpaths = set()
-        for added in added_torrents:
-            name = added.removesuffix('.torrent')
-            vidpaths.add(dir.joinpath(name))
-        self.sourceModel.removePendings(vidpaths)
+    def onTorrentsAdded(self, reltorrents: set[Path]):
+        """remove pending mark of corresponding video name.
+        reltorrents are relative to root
+        """
+        fullnames = set()
+        for reltorrent in reltorrents:
+            relname = str(reltorrent).removesuffix('.torrent')
+            fullname = self.root.joinpath(relname)
+            fullnames.add(fullname)
+        self.sourceModel.removePendings(fullnames)
 
     @wait_on_heavy_process
     def updatePubtypeByRow(self, row: int, proxyModel: ProxyTableModel, newPubtype: PubType):
@@ -184,7 +194,7 @@ class WndMain(QMainWindow, Ui_MainWindow):
     def on_actSettings_triggered(self):
         self.wndSettings.show()
 
-
+    # FIXME 右键菜单执行操作时assert一下是否符合条件：发布种子要存在种子；手动/自动制作种子时要设置bc路径；
     """Context Menu"""
     @wait_on_heavy_process
     def onPubMoreAction(self, view: QTableView, proxyModel: ProxyTableModel, newPubtype: PubType):
@@ -199,19 +209,19 @@ class WndMain(QMainWindow, Ui_MainWindow):
         view.selectRow(row)
 
         nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
-        relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
-        vidpath = self.root.joinpath(relpathIdx.data(), nameIdx.data())
-        torrentpath = Path(str(vidpath) + '.torrent')
+        reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
+        fullname = self.root.joinpath(reldirIdx.data(), nameIdx.data())
+        fulltorrent = Path(str(fullname) + '.torrent')
         try:
-            resp = self.client.upload_torrent(torrentpath, self.myteam.id)
+            resp = self.client.upload_torrent(fulltorrent, self.myteam.id)
             assert resp, 'resp 为空!'
         except (UploadTorrentException, Exception) as e:
             on_exception(self, '文件上传失败 ' + type(e).__name__ + '\n', str(e))
             return
 
-        while torrentpath.suffix:
-            torrentpath = torrentpath.with_suffix('')
-        title = torrentpath.stem
+        while fulltorrent.suffix:
+            fulltorrent = fulltorrent.with_suffix('')
+        title = fulltorrent.stem
 
         wndPubPreview = WndPubPreview(self.client, self.myteam, resp, title)
         wndPubPreview.setAttribute(Qt.WA_DeleteOnClose)
@@ -232,19 +242,19 @@ class WndMain(QMainWindow, Ui_MainWindow):
             row = idx.row()
 
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
-            relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
-            vidpath = self.root.joinpath(relpathIdx.data(), nameIdx.data())
-            torrentpath = Path(str(vidpath) + '.torrent')
+            reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
+            fullname = self.root.joinpath(reldirIdx.data(), nameIdx.data())
+            fulltorrent = Path(str(fullname) + '.torrent')
             try:
-                resp = self.client.upload_torrent(torrentpath, self.myteam.id)
+                resp = self.client.upload_torrent(fulltorrent, self.myteam.id)
                 assert resp, 'resp 为空!'
             except (UploadTorrentException, Exception) as e:
                 on_exception(self, nameIdx.data() + ' 文件上传失败 ' + type(e).__name__ + '\n', str(e))
                 continue
 
-            while torrentpath.suffix:
-                torrentpath = torrentpath.with_suffix('')
-            title = torrentpath.stem
+            while fulltorrent.suffix:
+                fulltorrent = fulltorrent.with_suffix('')
+            title = fulltorrent.stem
 
             try:
                 pubInfo = PublishInfo(self.myteam, resp, title)
@@ -277,13 +287,13 @@ class WndMain(QMainWindow, Ui_MainWindow):
 
         paths = set()
         for idx in idxes:
-            relpathIdx = idx.siblingAtColumn(TDB.COL_RELPATH)
+            reldirIdx = idx.siblingAtColumn(TDB.COL_RELDIR)
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
             # 从idx得到的结果是符号
-            btExisted = self.sourceModel.manager.db.selectBtByPath(self.root, relpathIdx.data(), nameIdx.data())
+            btExisted = self.sourceModel.manager.db.selectBtByPath(self.root, reldirIdx.data(), nameIdx.data())
             if btExisted:
                 continue
-            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
             paths.add(path)
 
         self.sourceModel.addPendings(paths)
@@ -299,8 +309,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
         for idx in view.selectedIndexes():
             # note multiple indexes when selecting the whole line
             nameIdx = idx.siblingAtColumn(TDB.COL_NAME)
-            relpathIdx = nameIdx.siblingAtColumn(TDB.COL_RELPATH)
-            path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+            reldirIdx = nameIdx.siblingAtColumn(TDB.COL_RELDIR)
+            path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
             self.openInExplorer(path)
             # only open the first file in selection
             break
@@ -341,8 +351,8 @@ class WndMain(QMainWindow, Ui_MainWindow):
     def on_view_doubleClicked(self, index: QModelIndex):
         # open in explorer
         nameIdx = index.siblingAtColumn(TDB.COL_NAME)
-        relpathIdx = index.siblingAtColumn(TDB.COL_RELPATH)
-        path = self.root.joinpath(relpathIdx.data(), nameIdx.data())
+        reldirIdx = index.siblingAtColumn(TDB.COL_RELDIR)
+        path = self.root.joinpath(reldirIdx.data(), nameIdx.data())
         self.openInExplorer(path)
 
     @pyqtSlot(QModelIndex)

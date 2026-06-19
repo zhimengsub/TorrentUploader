@@ -81,6 +81,7 @@ class WndSettings(QFrame, Ui_Settings):
 
     @pyqtSlot(QAbstractButton)
     def on_buttonBox_clicked(self, btn: QAbstractButton):
+        # on 'OK' or 'Cancel'
         role = self.buttonBox.buttonRole(btn)
         if role == QDialogButtonBox.AcceptRole:
             self.updateConfByUi()
